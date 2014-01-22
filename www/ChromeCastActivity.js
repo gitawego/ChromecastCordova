@@ -66,7 +66,7 @@
                     callback && callback(err);
                 },
                 "ChromeCast",
-                "play",
+                "playMedia",
                 [position]
             );
         },
@@ -79,7 +79,7 @@
                     callback && callback(err);
                 },
                 "ChromeCast",
-                "pause",
+                "pauseMedia",
                 []
             );
         },

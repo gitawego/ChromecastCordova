@@ -15,8 +15,6 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.HashMap;
-/*import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;*/
 
 
 import org.apache.cordova.CallbackContext;
@@ -69,10 +67,11 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     private HashMap<String, CallbackContext> channelCallback;
     private HashMap<String, Messenger> channels;
     private RouteInfo currentRoute;
-    private enum Actions{
-        setAppid,startReceiverListener,onMessage,sendMessage,
-        setReceiver,loadMedia,pause,seekBy,play
-    };
+
+    private enum Actions {
+        setAppId, startReceiverListener, onMessage, sendMessage, setReceiver,loadMedia,
+        pauseMedia, playMedia, seekBy, setVolume, setMuted, getMediaStatus, stopCast, startStatusListener
+    }
 
     /*public ChromecastPlugin() {
         
@@ -107,13 +106,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         final CallbackContext cb = callbackContext;
         logVIfEnabled(TAG, "APP ID: " + APP_ID);
-        /*try{
-            Method m = this.getClass().getDeclaredMethod(action);
-            m.setAccessible(true);
-            m.invoke(this,args,callbackContext);
-        }catch(Exception e){
-            callbackContext.error(e.getMessage());
-        }*/
+
         if (action.equals("setAppId")) {
             APP_ID = args.getString(0);
             cordova.getActivity().runOnUiThread(new Runnable() {
@@ -128,134 +121,160 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             callbackContext.error("APP_ID NOT FOUND");
             return false;
         }
-        if (action.equals("startReceiverListener")) {
-            cordova.getActivity().runOnUiThread(new Runnable() {
-                public void run() {
-                    receiverCallback = cb;
-                    JSONArray routeList = getRoutes();
-                    logVIfEnabled(TAG, "getting routers");
-                    PluginResult result = new PluginResult(PluginResult.Status.OK, routeList);
-                    result.setKeepCallback(true);
-                    receiverCallback.sendPluginResult(result);
+        switch (Actions.valueOf(action)) {
+            case startReceiverListener:
+                startReceiverListenerAction(callbackContext);
+                break;
+            case onMessage:
+                onMessage(args.getString(0), callbackContext);
+                break;
+            case sendMessage:
+                String channelName = args.getString(0);
+                JSONObject msg = args.getJSONObject(1);
+                try {
+                    sendMessage(channelName, msg, callbackContext);
+                } catch (IOException e) {
+                    callbackContext.error("SEND_MESSAGE_FAILED");
                 }
-            });
-        } else if (action.equals("onMessage")) {
-            onMessage(args.getString(0), callbackContext);
-        } else if (action.equals("sendMessage")) {
-            String channelName = args.getString(0);
-            JSONObject msg = args.getJSONObject(1);
-
-            try {
-                sendMessage(channelName, msg, callbackContext);
-            } catch (IOException e) {
-                callbackContext.error("SEND_MESSAGE_FAILED");
-            }
-
-        } else if (action.equals("setReceiver")) {
-            int index = args.getInt(0);
-            try {
-                final RouteInfo route = mediaRouter.getRoutes().get(index);
-                System.out.println("route :" + index + " " + route.getId() + " selected");
-                cordova.getActivity().runOnUiThread(new Runnable() {
-                    public void run() {
-                        mediaRouter.selectRoute(route);
-                        cb.success();
-                    }
-                });
-
-            } catch (IndexOutOfBoundsException e) {
-                callbackContext.error("Receiver not found");
-            }
-        } else if (action.equals("loadMedia")) {
-            final JSONObject opt = args.getJSONObject(0);
-            try {
-                System.out.println("casting...");
+                break;
+            case setReceiver:
+                setReceiverAction(args, callbackContext);
+                break;
+            case loadMedia:
+                loadMediaAction(args, callbackContext);
+                break;
+            case pauseMedia:
+                pauseMediaAction(callbackContext);
+                break;
+            case playMedia:
+                playMediaAction(args, callbackContext);
+                break;
+            case seekBy:
+                try {
+                    seekBy(args.getInt(0));
+                    cb.success();
+                } catch (IOException e) {
+                    cb.error(e.getMessage());
+                }
+                break;
+            case setVolume:
+                final double vol = args.getLong(0);
+                System.out.println("setVolume");
                 cordova.getThreadPool().execute(new Runnable() {
                     public void run() {
-                        try {
-                            startCast(opt, cb);
-                        } catch (Exception e) {
-                            cb.error(e.getMessage());
-                        }
+                        setVolume(vol, cb);
                     }
                 });
-            } catch (Exception e) {
-                callbackContext.error("cast failed :" + e.getMessage());
+                break;
+            case setMuted:
+                final boolean muted = args.getBoolean(0);
+                System.out.println("setMuted");
+                cordova.getThreadPool().execute(new Runnable() {
+                    public void run() {
+                        setMuted(muted, cb);
+                    }
+                });
+                break;
+            case getMediaStatus:
+                System.out.println("getMediaStatus");
+                callbackContext.sendPluginResult(getStatus(""));
+                break;
+            case stopCast:
+                try {
+                    System.out.println("stopCast");
+                    stopCast();
+                    callbackContext.success();
+                } catch (IOException e) {
+                    callbackContext.error("stop cast failed :" + e.getMessage());
+                    return false;
+                }
+                break;
+            case startStatusListener:
+                statusCallback = callbackContext;
+                callbackContext.sendPluginResult(getStatus(null));
+                break;
+            default:
+                callbackContext.error("Invalid action");
+
+        }
+
+        return true;
+    }
+
+    private void startReceiverListenerAction(final CallbackContext callbackContext) {
+        cordova.getActivity().runOnUiThread(new Runnable() {
+            public void run() {
+                receiverCallback = callbackContext;
+                JSONArray routeList = getRoutes();
+                logVIfEnabled(TAG, "getting routers");
+                PluginResult result = new PluginResult(PluginResult.Status.OK, routeList);
+                result.setKeepCallback(true);
+                receiverCallback.sendPluginResult(result);
             }
-        } else if (action.equals("pause")) {
-            System.out.println("pause");
-            cordova.getThreadPool().execute(new Runnable() {
+        });
+    }
+
+    private void setReceiverAction(JSONArray args, final CallbackContext callbackContext) throws JSONException {
+        int index = args.getInt(0);
+        try {
+            final RouteInfo route = mediaRouter.getRoutes().get(index);
+            System.out.println("route :" + index + " " + route.getId() + " selected");
+            cordova.getActivity().runOnUiThread(new Runnable() {
                 public void run() {
-                    try {
-                        pause();
-                        cb.success();
-                    } catch (IOException e) {
-                        cb.error(e.getMessage());
-                    }
-                }
-            });
-        } else if (action.equals("play")) {
-            final int position = args.getInt(0);
-            System.out.println("play :" + position);
-            cordova.getThreadPool().execute(new Runnable() {
-                public void run() {
-                    try {
-                        play(position);
-                        cb.success();
-                    } catch (IOException e) {
-                        cb.error(e.getMessage());
-                    }
-                }
-            });
-        } else if (action.equals("seekBy")) {
-            final int position = args.getInt(0);
-            cordova.getThreadPool().execute(new Runnable() {
-                public void run() {
-                    try {
-                        seekBy(position);
-                        cb.success();
-                    } catch (IOException e) {
-                        cb.error(e.getMessage());
-                    }
+                    mediaRouter.selectRoute(route);
+                    callbackContext.success();
                 }
             });
 
-        } else if (action.equals("setVolume")) {
-            final double vol = args.getLong(0);
-            System.out.println("setVolume");
-            cordova.getThreadPool().execute(new Runnable() {
-                public void run() {
-                    setVolume(vol, cb);
-                }
-            });
-        } else if (action.equals("setMuted")) {
-            final boolean muted = args.getBoolean(0);
-            System.out.println("setMuted");
-            cordova.getThreadPool().execute(new Runnable() {
-                public void run() {
-                    setMuted(muted, cb);
-                }
-            });
-        } else if (action.equals("getMediaStatus")) {
-            System.out.println("getMediaStatus");
-            callbackContext.sendPluginResult(getStatus(""));
-        } else if (action.equals("stopCast")) {
-            try {
-                System.out.println("stopCast");
-                stopCast();
-                callbackContext.success();
-            } catch (IOException e) {
-                callbackContext.error("stop cast failed :" + e.getMessage());
-                return false;
-            }
-        } else if (action.equals("startStatusListener")) {
-            statusCallback = callbackContext;
-            callbackContext.sendPluginResult(getStatus(null));
-        } else {
-            callbackContext.error("Invalid action");
-            return false;
+        } catch (IndexOutOfBoundsException e) {
+            callbackContext.error("Receiver not found");
         }
-        return true;
+    }
+
+    private void loadMediaAction(JSONArray args, final CallbackContext callbackContext) throws JSONException {
+        final JSONObject opt = args.getJSONObject(0);
+        try {
+            System.out.println("casting...");
+            cordova.getThreadPool().execute(new Runnable() {
+                public void run() {
+                    try {
+                        startCast(opt, callbackContext);
+                    } catch (Exception e) {
+                        callbackContext.error(e.getMessage());
+                    }
+                }
+            });
+        } catch (Exception e) {
+            callbackContext.error("cast failed :" + e.getMessage());
+        }
+    }
+
+    private void playMediaAction(JSONArray args, final CallbackContext callbackContext) throws JSONException {
+        final int position = args.getInt(0);
+        System.out.println("play :" + position);
+        cordova.getThreadPool().execute(new Runnable() {
+            public void run() {
+                try {
+                    play(position);
+                    callbackContext.success();
+                } catch (IOException e) {
+                    callbackContext.error(e.getMessage());
+                }
+            }
+        });
+    }
+
+    private void pauseMediaAction(final CallbackContext callbackContext) {
+        cordova.getThreadPool().execute(new Runnable() {
+            public void run() {
+                try {
+                    pause();
+                    callbackContext.success();
+                } catch (IOException e) {
+                    callbackContext.error(e.getMessage());
+                }
+            }
+        });
     }
 
     private JSONArray getRoutes() {
@@ -477,11 +496,19 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         }
     }
 
-    private void seekBy(int value) throws IOException {
+    private void seekBy(final int value) throws IOException {
         if (messageStream != null) {
-            double pos = messageStream.getStreamPosition();
-            pos = pos + value;
-            play((int) pos);
+            cordova.getThreadPool().execute(new Runnable() {
+                public void run() {
+                    double pos = messageStream.getStreamPosition();
+                    pos = pos + value;
+                    try {
+                        play((int) pos);
+                    } catch (IOException e) {
+                        logVIfEnabled(TAG, "seekBy Error " + e.getMessage());
+                    }
+                }
+            });
         }
     }
 
