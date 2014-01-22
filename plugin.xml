@@ -4,6 +4,7 @@
     <description>ChromeCast PhoneGap Plugin for Android</description>
     <license>Apache 2.0</license>
     <keywords>cordova,ChromeCast</keywords>
+    <author>Hongbo LU</author>
     <!--<repo></repo>-->
     <engines>
         <engine name="cordova" version=">=3.2.0"/>
@@ -12,10 +13,10 @@
         <clobbers target="CustomEvent"/>
     </js-module>
     <js-module src="www/ChromeCast.js" name="ChromeCast">
-        <clobbers target="cast"/>
+        <clobbers target="ChromeCast"/>
     </js-module>
     <js-module src="www/ChromeCastActivity.js" name="ChromeCastActivity">
-        <clobbers target="cast.Activity"/>
+        <clobbers target="ChromeCast.Activity"/>
     </js-module>
 
     <!-- android -->

@@ -49,7 +49,8 @@ import com.google.cast.MediaRouteStateChangeListener;
 import com.google.cast.SessionError;
 
 public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
-    private final String APP_ID = "31a76198-2182-481a-a4a6-27d351872026";
+    //private final String APP_ID = "31a76198-2182-481a-a4a6-27d351872026";
+    private String APP_ID = null;
     public static final boolean ENABLE_LOGV = true;
     private static final String TAG = "ChromCastPlugin";
 
@@ -107,6 +108,15 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         final CallbackContext cb = callbackContext;
+        if (action.equals("setAppId")) {
+            APP_ID = args.getString(0);
+            callbackContext.success();
+            return true;
+        }
+        if(APP_ID == null){
+            callbackContext.error("APP_ID NOT FOUND");
+            return false;
+        }
         if (action.equals("startReceiverListener")) {
             receiverCallback = callbackContext;
             JSONArray routeList = getRoutes();
@@ -115,6 +125,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             receiverCallback.sendPluginResult(result);
             return true;
         }
+
         if (action.equals("onMessage")) {
             String channelName = args.getString(0);
 
@@ -260,7 +271,6 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         callbackContext.error("Invalid action");
         return false;
     }
-
     private JSONArray getRoutes() {
         JSONArray routeList = new JSONArray();
         final int l = routes.size();

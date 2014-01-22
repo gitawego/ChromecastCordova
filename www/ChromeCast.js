@@ -10,20 +10,45 @@
             receiverList: [],
             isAvailable: false
         }, evt = new CustomEvent();
-    module.exports = {
+
+    function ChromeCast(opt) {
+        var self = this;
+        this.appId = opt.appId;
+        exec(
+            function () {
+                self.initialized = true;
+                self.emit('initialized');
+            },
+            function (err) {
+
+            },
+            "ChromeCast",
+            "setAppId",
+            [this.appId]
+        );
+    }
+
+    ChromeCast.prototype = {
         init: function () {
             var self = this;
-            this.startReceiverListener(function (err) {
-                if (err) {
-                    throw new Error('cast initialization failed : ' + err);
-                } else {
-                    globalConf.isAvailable = true;
-                    window.postMessage && window.postMessage({
-                        source: 'CastApi',
-                        event: 'Hello'
-                    }, window.location.href);
-                }
-            });
+            if (this.initialized) {
+                this.startReceiverListener(function (err) {
+                    if (err) {
+                        throw new Error('cast initialization failed : ' + err);
+                    } else {
+                        globalConf.isAvailable = true;
+                        window.postMessage && window.postMessage({
+                            source: 'CastApi',
+                            event: 'Hello'
+                        }, window.location.href);
+                    }
+                });
+            } else {
+                this.once('initialized', function () {
+                    return self.init();
+                });
+            }
+            return this;
         },
         startReceiverListener: function (callback) {
             if (globalConf.receiverListener) {
@@ -56,6 +81,9 @@
         on: function (evtName, fnc) {
             return evt.on(evtName, fnc);
         },
+        once: function (evtName, fnc) {
+            return evt.once(evtName, fnc);
+        },
         emit: function () {
             return evt.apply(evt, arguments);
         },
@@ -80,4 +108,5 @@
             };
         }
     };
+    module.exports = ChromeCast;
 })();
