@@ -13,9 +13,10 @@ package com.sesamtv.cordova.chromecast;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
+/*import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;*/
 
 
 import org.apache.cordova.CallbackContext;
@@ -68,6 +69,10 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     private HashMap<String, CallbackContext> channelCallback;
     private HashMap<String, Messenger> channels;
     private RouteInfo currentRoute;
+    private enum Actions{
+        setAppid,startReceiverListener,onMessage,sendMessage,
+        setReceiver,loadMedia,pause,seekBy,play
+    };
 
     /*public ChromecastPlugin() {
         
@@ -84,7 +89,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     }
 
     private void initRouters() {
-        logVIfEnabled(TAG,"init routers...");
+        logVIfEnabled(TAG, "init routers...");
         castContext = new CastContext(cordova.getActivity().getApplicationContext());
         MediaRouteHelper.registerMinimalMediaRouteProvider(castContext, this);
 
@@ -101,7 +106,14 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         final CallbackContext cb = callbackContext;
-        logVIfEnabled(TAG,"APP ID: "+APP_ID);
+        logVIfEnabled(TAG, "APP ID: " + APP_ID);
+        /*try{
+            Method m = this.getClass().getDeclaredMethod(action);
+            m.setAccessible(true);
+            m.invoke(this,args,callbackContext);
+        }catch(Exception e){
+            callbackContext.error(e.getMessage());
+        }*/
         if (action.equals("setAppId")) {
             APP_ID = args.getString(0);
             cordova.getActivity().runOnUiThread(new Runnable() {
@@ -112,33 +124,24 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             });
             return true;
         }
-        if(APP_ID == null){
+        if (APP_ID == null) {
             callbackContext.error("APP_ID NOT FOUND");
             return false;
         }
         if (action.equals("startReceiverListener")) {
-
             cordova.getActivity().runOnUiThread(new Runnable() {
                 public void run() {
                     receiverCallback = cb;
                     JSONArray routeList = getRoutes();
-                    logVIfEnabled(TAG,"getting routers");
+                    logVIfEnabled(TAG, "getting routers");
                     PluginResult result = new PluginResult(PluginResult.Status.OK, routeList);
                     result.setKeepCallback(true);
                     receiverCallback.sendPluginResult(result);
                 }
             });
-
-            return true;
-        }
-
-        if (action.equals("onMessage")) {
-            String channelName = args.getString(0);
-
-            onMessage(channelName, callbackContext);
-            return true;
-        }
-        if (action.equals("sendMessage")) {
+        } else if (action.equals("onMessage")) {
+            onMessage(args.getString(0), callbackContext);
+        } else if (action.equals("sendMessage")) {
             String channelName = args.getString(0);
             JSONObject msg = args.getJSONObject(1);
 
@@ -148,9 +151,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                 callbackContext.error("SEND_MESSAGE_FAILED");
             }
 
-            return true;
-        }
-        if (action.equals("setReceiver")) {
+        } else if (action.equals("setReceiver")) {
             int index = args.getInt(0);
             try {
                 final RouteInfo route = mediaRouter.getRoutes().get(index);
@@ -162,14 +163,10 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                     }
                 });
 
-                return true;
             } catch (IndexOutOfBoundsException e) {
                 callbackContext.error("Receiver not found");
-                return false;
             }
-        }
-
-        if (action.equals("loadMedia")) {
+        } else if (action.equals("loadMedia")) {
             final JSONObject opt = args.getJSONObject(0);
             try {
                 System.out.println("casting...");
@@ -182,13 +179,10 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                         }
                     }
                 });
-                return true;
             } catch (Exception e) {
                 callbackContext.error("cast failed :" + e.getMessage());
-                return false;
             }
-        }
-        if (action.equals("pause")) {
+        } else if (action.equals("pause")) {
             System.out.println("pause");
             cordova.getThreadPool().execute(new Runnable() {
                 public void run() {
@@ -200,9 +194,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                     }
                 }
             });
-            return true;
-        }
-        if (action.equals("play")) {
+        } else if (action.equals("play")) {
             final int position = args.getInt(0);
             System.out.println("play :" + position);
             cordova.getThreadPool().execute(new Runnable() {
@@ -215,10 +207,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                     }
                 }
             });
-            return true;
-        }
-        if (action.equals("seekBy")) {
-
+        } else if (action.equals("seekBy")) {
             final int position = args.getInt(0);
             cordova.getThreadPool().execute(new Runnable() {
                 public void run() {
@@ -230,10 +219,8 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                     }
                 }
             });
-            return true;
 
-        }
-        if (action.equals("setVolume")) {
+        } else if (action.equals("setVolume")) {
             final double vol = args.getLong(0);
             System.out.println("setVolume");
             cordova.getThreadPool().execute(new Runnable() {
@@ -241,9 +228,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                     setVolume(vol, cb);
                 }
             });
-            return true;
-        }
-        if (action.equals("setMuted")) {
+        } else if (action.equals("setMuted")) {
             final boolean muted = args.getBoolean(0);
             System.out.println("setMuted");
             cordova.getThreadPool().execute(new Runnable() {
@@ -251,32 +236,28 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                     setMuted(muted, cb);
                 }
             });
-            return true;
-        }
-        if (action.equals("getMediaStatus")) {
+        } else if (action.equals("getMediaStatus")) {
             System.out.println("getMediaStatus");
             callbackContext.sendPluginResult(getStatus(""));
-            return true;
-        }
-        if (action.equals("stopCast")) {
+        } else if (action.equals("stopCast")) {
             try {
                 System.out.println("stopCast");
                 stopCast();
                 callbackContext.success();
-                return true;
             } catch (IOException e) {
                 callbackContext.error("stop cast failed :" + e.getMessage());
                 return false;
             }
-        }
-        if (action.equals("startStatusListener")) {
+        } else if (action.equals("startStatusListener")) {
             statusCallback = callbackContext;
             callbackContext.sendPluginResult(getStatus(null));
-            return true;
+        } else {
+            callbackContext.error("Invalid action");
+            return false;
         }
-        callbackContext.error("Invalid action");
-        return false;
+        return true;
     }
+
     private JSONArray getRoutes() {
         JSONArray routeList = new JSONArray();
         List<RouteInfo> routesInMedia = mediaRouter.getRoutes();
@@ -582,19 +563,21 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
     @Override
     public void onPause(boolean multitasking) {
+        logVIfEnabled(TAG, "on pause");
         super.onPause(multitasking);
     }
 
     @Override
     public void onReset() {
         super.onReset();
+        logVIfEnabled(TAG, "on reset -- end session");
         endSession();
     }
 
     @Override
     public void onResume(boolean multitasking) {
         super.onResume(multitasking);
-        logVIfEnabled(TAG,"resuming a session");
+        logVIfEnabled(TAG, "resuming a session");
         if (session != null && session.isResumable()) {
             try {
                 session.resumeSession();
@@ -623,6 +606,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         @Override
         public void onRouteAdded(MediaRouter router, RouteInfo route) {
             super.onRouteAdded(router, route);
+            logVIfEnabled(TAG, router.toString());
             System.out.println("route added :" + route.getId() + ":" + route.getName() + ":" + route.getDescription());
             if (receiverCallback != null) {
                 JSONArray jsonRoute = getRoutes();
