@@ -1,7 +1,7 @@
 /**
- *  PhoneStateChangeListener cordova plugin (Android)
+ *  ChromeCast cordova plugin (Android)
  *
- *    @author Hongbo LU
+ *  @author Hongbo LU
  *  @see http://sesamtv.com
  *  @license MIT <http://szanata.com/MIT.txt>
  *  @license GNU <http://szanata.com/GNU.txt>
