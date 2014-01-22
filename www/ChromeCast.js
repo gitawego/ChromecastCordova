@@ -17,10 +17,11 @@
         exec(
             function () {
                 self.initialized = true;
+                console.log('chromecast initialized');
                 self.emit('initialized');
             },
             function (err) {
-
+                console.log('chromecast init error',err);
             },
             "ChromeCast",
             "setAppId",
@@ -70,6 +71,9 @@
             );
         },
         getReceiver: function (id) {
+            if(typeof(id) === 'undefined'){
+                return globalConf.receiverList;
+            }
             var i = 0, l = globalConf.receiverList.length, rec;
             for (; i < l; i++) {
                 rec = globalConf.receiverList[i];
@@ -85,7 +89,7 @@
             return evt.once(evtName, fnc);
         },
         emit: function () {
-            return evt.apply(evt, arguments);
+            return evt.emit.apply(evt, arguments);
         },
         launch: function (receiverInfo) {
             var self = this, callback, fallback;

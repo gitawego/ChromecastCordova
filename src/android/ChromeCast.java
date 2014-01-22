@@ -63,7 +63,6 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     private MediaRouter.Callback mediaRouterCallback;
     private MediaRouteStateChangeListener routeStateListener;
     private MediaProtocolCommand status;
-    private List<RouteInfo> routes;
     private CallbackContext receiverCallback;
     private CallbackContext statusCallback;
     private HashMap<String, CallbackContext> channelCallback;
@@ -71,27 +70,21 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     private RouteInfo currentRoute;
 
     /*public ChromecastPlugin() {
-        routes = new ArrayList<RouteInfo>();
+        
     }*/
 
     public void initialize(final CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
         //Logger.setDebugEnabledByDefault(true);
-        routes = new ArrayList<RouteInfo>();
         channelCallback = new HashMap<String, CallbackContext>();
         channels = new HashMap<String, Messenger>();
         receiverCallback = null;
         statusCallback = null;
 
-        cordova.getActivity().runOnUiThread(new Runnable() {
-            public void run() {
-                initRouters();
-            }
-        });
-
     }
 
     private void initRouters() {
+        logVIfEnabled(TAG,"init routers...");
         castContext = new CastContext(cordova.getActivity().getApplicationContext());
         MediaRouteHelper.registerMinimalMediaRouteProvider(castContext, this);
 
@@ -108,9 +101,15 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) throws JSONException {
         final CallbackContext cb = callbackContext;
+        logVIfEnabled(TAG,"APP ID: "+APP_ID);
         if (action.equals("setAppId")) {
             APP_ID = args.getString(0);
-            callbackContext.success();
+            cordova.getActivity().runOnUiThread(new Runnable() {
+                public void run() {
+                    initRouters();
+                    cb.success();
+                }
+            });
             return true;
         }
         if(APP_ID == null){
@@ -118,11 +117,18 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             return false;
         }
         if (action.equals("startReceiverListener")) {
-            receiverCallback = callbackContext;
-            JSONArray routeList = getRoutes();
-            PluginResult result = new PluginResult(PluginResult.Status.OK, routeList);
-            result.setKeepCallback(true);
-            receiverCallback.sendPluginResult(result);
+
+            cordova.getActivity().runOnUiThread(new Runnable() {
+                public void run() {
+                    receiverCallback = cb;
+                    JSONArray routeList = getRoutes();
+                    logVIfEnabled(TAG,"getting routers");
+                    PluginResult result = new PluginResult(PluginResult.Status.OK, routeList);
+                    result.setKeepCallback(true);
+                    receiverCallback.sendPluginResult(result);
+                }
+            });
+
             return true;
         }
 
@@ -147,7 +153,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         if (action.equals("setReceiver")) {
             int index = args.getInt(0);
             try {
-                final RouteInfo route = routes.get(index);
+                final RouteInfo route = mediaRouter.getRoutes().get(index);
                 System.out.println("route :" + index + " " + route.getId() + " selected");
                 cordova.getActivity().runOnUiThread(new Runnable() {
                     public void run() {
@@ -273,13 +279,14 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     }
     private JSONArray getRoutes() {
         JSONArray routeList = new JSONArray();
-        final int l = routes.size();
+        List<RouteInfo> routesInMedia = mediaRouter.getRoutes();
+        final int l = routesInMedia.size();
         if (l == 0) {
             return routeList;
         }
         try {
             for (int i = 0; i < l; i++) {
-                RouteInfo rInfo = routes.get(i);
+                RouteInfo rInfo = routesInMedia.get(i);
                 JSONObject jsonRoute = new JSONObject();
                 jsonRoute.put("id", rInfo.getId());
                 jsonRoute.put("name", rInfo.getName());
@@ -587,6 +594,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     @Override
     public void onResume(boolean multitasking) {
         super.onResume(multitasking);
+        logVIfEnabled(TAG,"resuming a session");
         if (session != null && session.isResumable()) {
             try {
                 session.resumeSession();
@@ -615,7 +623,6 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         @Override
         public void onRouteAdded(MediaRouter router, RouteInfo route) {
             super.onRouteAdded(router, route);
-            routes.add(route);
             System.out.println("route added :" + route.getId() + ":" + route.getName() + ":" + route.getDescription());
             if (receiverCallback != null) {
                 JSONArray jsonRoute = getRoutes();
@@ -629,7 +636,6 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         public void onRouteRemoved(MediaRouter router, RouteInfo route) {
             super.onRouteRemoved(router, route);
             System.out.println("route removed :" + route.getId() + ":" + route.getName() + ":" + route.getDescription());
-            routes.remove(route);
             if (receiverCallback != null) {
                 JSONArray jsonRoute = getRoutes();
                 PluginResult result = new PluginResult(PluginResult.Status.OK, jsonRoute);
