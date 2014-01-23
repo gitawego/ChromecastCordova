@@ -215,12 +215,13 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     }
 
     private void setReceiverAction(JSONArray args, final CallbackContext callbackContext) throws JSONException {
-        int index = args.getInt(0);
+        final int index = args.getInt(0);
         try {
-            final RouteInfo route = mediaRouter.getRoutes().get(index);
-            System.out.println("route :" + index + " " + route.getId() + " selected");
+
             cordova.getActivity().runOnUiThread(new Runnable() {
                 public void run() {
+                    final RouteInfo route = mediaRouter.getRoutes().get(index);
+                    System.out.println("route :" + index + " " + route.getId() + " selected");
                     mediaRouter.selectRoute(route);
                     callbackContext.success();
                 }

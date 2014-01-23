@@ -1,4 +1,4 @@
-/*global require,define,console,module,cast,CustomEvent*/
+/*global require,define,console,module,CustomEvent*/
 /*jslint plusplus: true */
 /*jslint expr:true */
 (function () {
@@ -95,7 +95,7 @@
             var self = this, callback, fallback;
             exec(
                 function () {
-                    callback && callback(new cast.Activity(receiverInfo, self));
+                    callback && callback(new ChromeCast.Activity(receiverInfo, self));
                 },
                 function (err) {
                     fallback && fallback(err);
