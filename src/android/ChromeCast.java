@@ -63,7 +63,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     private MediaRouteStateChangeListener routeStateListener;
     private MediaProtocolCommand status;
     private CallbackContext receiverCallback;
-    private CallbackContext statusCallback;
+    private CallbackContext mediaStatusCallback;
     private HashMap<String, CallbackContext> channelCallback;
     private HashMap<String, Messenger> channels;
     private RouteInfo currentRoute;
@@ -83,7 +83,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         channelCallback = new HashMap<String, CallbackContext>();
         channels = new HashMap<String, Messenger>();
         receiverCallback = null;
-        statusCallback = null;
+        mediaStatusCallback = null;
 
     }
 
@@ -177,7 +177,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                 break;
             case getMediaStatus:
                 System.out.println("getMediaStatus");
-                callbackContext.sendPluginResult(getStatus(""));
+                callbackContext.sendPluginResult(getMediaStatus(""));
                 break;
             case stopCast:
                 try {
@@ -190,8 +190,8 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                 }
                 break;
             case startStatusListener:
-                statusCallback = callbackContext;
-                callbackContext.sendPluginResult(getStatus(null));
+                mediaStatusCallback = callbackContext;
+                callbackContext.sendPluginResult(getMediaStatus(null));
                 break;
             default:
                 callbackContext.error("Invalid action");
@@ -460,15 +460,15 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                 cmd.setListener(new MediaProtocolCommand.Listener() {
                     public void onCompleted(MediaProtocolCommand cmd) {
                         System.out.println("load complete :" + url);
-                        if (statusCallback != null) {
-                            statusCallback.sendPluginResult(getStatus("load complete :" + url));
+                        if (mediaStatusCallback != null) {
+                            mediaStatusCallback.sendPluginResult(getMediaStatus("load complete :" + url));
                         }
                     }
 
                     public void onCancelled(MediaProtocolCommand cmd) {
                         System.out.println("load cancelled :" + url);
-                        if (statusCallback != null) {
-                            statusCallback.sendPluginResult(getStatus("load cancelled :" + url));
+                        if (mediaStatusCallback != null) {
+                            mediaStatusCallback.sendPluginResult(getMediaStatus("load cancelled :" + url));
                         }
                     }
                 });
@@ -476,8 +476,8 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             } catch (IOException e) {
                 System.out.println("load exception :" + e.getMessage());
                 e.printStackTrace();
-                if (statusCallback != null) {
-                    statusCallback.sendPluginResult(getStatus("load exception :" + e.getMessage()));
+                if (mediaStatusCallback != null) {
+                    mediaStatusCallback.sendPluginResult(getMediaStatus("load exception :" + e.getMessage()));
                 }
                 callbackContext.error("FAILED_TO_CAST");
             }
@@ -550,7 +550,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         }
     }
 
-    private PluginResult getStatus(String statusMessage) {
+    private PluginResult getMediaStatus(String statusMessage) {
         JSONObject status = new JSONObject();
         try {
             if (messageStream != null) {
@@ -673,8 +673,8 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         public void run() {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    if (statusCallback != null) {
-                        statusCallback.sendPluginResult(getStatus(null));
+                    if (mediaStatusCallback != null) {
+                        mediaStatusCallback.sendPluginResult(getMediaStatus(null));
                     }
                     Thread.sleep(1000);
                 } catch (Exception e) {

@@ -44,6 +44,7 @@
                         }, window.location.href);
                     }
                 });
+                this.startStatusListener();
             } else {
                 this.once('initialized', function () {
                     return self.init();
@@ -51,7 +52,25 @@
             }
             return this;
         },
-        startReceiverListener: function (callback) {
+        startStatusListener:function(callback,errback){
+            if (globalConf.statusListener) {
+                return;
+            }
+            globalConf.statusListener = true;
+            exec(
+                function (status) {
+                    evt.emit('mediaStatus', status);
+                    !globalConf.statusListener && callback && callback(status);
+                },
+                function (err) {
+                    errback && errback(err);
+                },
+                "ChromeCast",
+                "startStatusListener",
+                []
+            );
+        },
+        startReceiverListener: function (callback,errback) {
             if (globalConf.receiverListener) {
                 return;
             }
@@ -63,7 +82,7 @@
                     !globalConf.receiverListener && callback && callback(receivers);
                 },
                 function (err) {
-                    callback && callback(err);
+                    errback && errback(err);
                 },
                 "ChromeCast",
                 "startReceiverListener",
@@ -95,6 +114,7 @@
             var self = this, callback, fallback;
             exec(
                 function () {
+                    console.log('launch',receiverInfo);
                     callback && callback(new ChromeCast.Activity(receiverInfo, self));
                 },
                 function (err) {

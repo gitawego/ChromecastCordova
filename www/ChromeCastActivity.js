@@ -97,6 +97,9 @@
                 []
             );
         },
+        onMediaStatus:function(fnc){
+            return this.caster.on('mediaStatus',fnc);
+        },
         getMediaStatus: function (callback) {
             exec(
                 function (status) {
