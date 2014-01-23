@@ -21,7 +21,7 @@
                 self.emit('initialized');
             },
             function (err) {
-                console.log('chromecast init error',err);
+                console.error('chromecast init error',err);
             },
             "ChromeCast",
             "setAppId",
@@ -111,23 +111,24 @@
             return evt.emit.apply(evt, arguments);
         },
         launch: function (receiverInfo) {
-            var self = this, callback, fallback;
-            exec(
-                function () {
-                    console.log('launch',receiverInfo);
-                    callback && callback(new ChromeCast.Activity(receiverInfo, self));
-                },
-                function (err) {
-                    fallback && fallback(err);
-                },
-                "ChromeCast",
-                "setReceiver",
-                [receiverInfo.index]
-            );
+            var self = this, promise = {};
+            setTimeout(function(){
+                exec(
+                    function () {
+                        promise.callback && promise.callback(new ChromeCast.Activity(receiverInfo, self));
+                    },
+                    function (err) {
+                        promise.fallback && promise.fallback(err);
+                    },
+                    "ChromeCast",
+                    "setReceiver",
+                    [receiverInfo.index]
+                );
+            },0);
             return {
                 then: function (cb, fb) {
-                    callback = cb;
-                    fallback = fb;
+                    promise.callback = cb;
+                    promise.fallback = fb;
                 }
             };
         }

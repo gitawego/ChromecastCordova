@@ -22,11 +22,11 @@
                         evt.emit(channelName, evt);
                     },
                     function (err) {
-                        console.error('err', err);
+                        console.error('onMessage Error : '+err+' for channel '+channelName);
                     },
                     "ChromeCast",
                     "onMessage",
-                    []
+                    [channelName]
                 );
             }
             return evt.on(channelName, fnc);
@@ -37,6 +37,7 @@
                     callback && callback(null, evt);
                 },
                 function (err) {
+                    console.error('sendMessage Error',err);
                     callback && callback(err);
                 },
                 "ChromeCast",
