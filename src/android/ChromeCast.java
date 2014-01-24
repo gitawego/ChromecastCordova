@@ -65,8 +65,8 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     private CallbackContext mediaStatusCallback;
     private CallbackContext setReceiverCallback;
     private CallbackContext onEndedCallback;
-    private HashMap<String, CallbackContext> channelCallback;
-    private HashMap<String, Messenger> channels;
+    private HashMap<String, CallbackContext> channelCallbacks;
+    private HashMap<String, Messenger> channelMessengers;
     private RouteInfo currentRoute;
 
     private enum Actions {
@@ -76,14 +76,14 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     }
 
     /*public ChromecastPlugin() {
-        
+
     }*/
 
     public void initialize(final CordovaInterface cordova, CordovaWebView webView) {
         super.initialize(cordova, webView);
         //Logger.setDebugEnabledByDefault(true);
-        channelCallback = new HashMap<String, CallbackContext>();
-        channels = new HashMap<String, Messenger>();
+        channelCallbacks = new HashMap<String, CallbackContext>();
+        channelMessengers = new HashMap<String, Messenger>();
         receiverCallback = null;
         mediaStatusCallback = null;
 
@@ -139,6 +139,9 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                     mediaStatusCallback = callbackContext;
                     callbackContext.sendPluginResult(getMediaStatus(null));
                     break;
+                case setReceiver:
+                    setReceiverAction(args, callbackContext);
+                    break;
                 case onMessage:
                     onMessage(args.getString(0), callbackContext);
                     break;
@@ -156,9 +159,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                     });
 
                     break;
-                case setReceiver:
-                    setReceiverAction(args, callbackContext);
-                    break;
+
                 case loadMedia:
                     loadMediaAction(args, callbackContext);
                     break;
@@ -245,15 +246,20 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         final int index = args.getInt(0);
         setReceiverCallback = callbackContext;
         try {
-
             cordova.getActivity().runOnUiThread(new Runnable() {
                 public void run() {
                     final RouteInfo route = mediaRouter.getRoutes().get(index);
-                    Log.d(TAG, "route :" + index + " " + route.getId() + " selected");
-                    mediaRouter.selectRoute(route);
+                    Log.d(TAG, "route :" + index + " " + route.getId() + " selected " + route.isSelected());
+
+                    if (route.isSelected()) {
+                        mediaRouter.updateSelectedRoute(mediaRouteSelector);
+                        mediaRouter.selectRoute(route);
+                        openSession();
+                    } else {
+                        mediaRouter.selectRoute(route);
+                    }
                 }
             });
-
         } catch (IndexOutOfBoundsException e) {
             callbackContext.error("Receiver not found");
         }
@@ -321,6 +327,9 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                 jsonRoute.put("description", rInfo.getDescription());
                 jsonRoute.put("isSelected", rInfo.isSelected());
                 jsonRoute.put("index", i);
+                if(selectedDevice != null){
+                    jsonRoute.put("ipAddress",selectedDevice.getIpAddress());
+                }
                 routeList.put(jsonRoute);
             }
         } catch (JSONException e) {
@@ -396,15 +405,16 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
             @Override
             public void onSessionStartFailed(SessionError error) {
-                Log.e(TAG, "onStartFailed " + error);
-                messageStream = null;
+                Log.e(TAG, "onSessionStartFailed " + error);
+                resetSessionChannel();
             }
 
             @Override
             public void onSessionEnded(SessionError error) {
-                Log.i(TAG, "onEnded " + error);
-                messageStream = null;
-                if(onEndedCallback != null){
+                Log.i(TAG, "onSessionEnded " + error);
+
+                resetSessionChannel();
+                if (onEndedCallback != null) {
                     PluginResult result = new PluginResult(PluginResult.Status.OK, new JSONObject());
                     result.setKeepCallback(true);
                     onEndedCallback.sendPluginResult(result);
@@ -424,6 +434,13 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         } catch (IOException e) {
             Log.e(TAG, "Failed to open session", e);
         }
+    }
+
+    private void resetSessionChannel() {
+        messageStream = null;
+        channelCallbacks.clear();
+        channelMessengers.clear();
+        session = null;
     }
 
     private void endSession() {
@@ -450,7 +467,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             }
             return;
         }
-        if (channels.get(channelName) == null) {
+        if (channelMessengers.get(channelName) == null) {
 
             cordova.getActivity().runOnUiThread(new Runnable() {
                 public void run() {
@@ -463,8 +480,8 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                     Messenger msg = new Messenger(channelName);
                     Log.d(TAG, "adding msg stream " + channelName);
                     channel.attachMessageStream(msg);
-                    channels.put(channelName, msg);
-                    channelCallback.put(channelName, callbackContext);
+                    channelMessengers.put(channelName, msg);
+                    channelCallbacks.put(channelName, callbackContext);
                 }
             });
 
@@ -474,10 +491,10 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
     private void sendMessage(String channelName, JSONObject msg, CallbackContext callbackContext) throws IOException {
         Log.d(TAG, "sendMessage to channel " + channelName);
-        Messenger msgerInChannel = channels.get(channelName);
+        Messenger msgerInChannel = channelMessengers.get(channelName);
         if (msgerInChannel == null) {
             onMessage(channelName, null);
-            msgerInChannel = channels.get(channelName);
+            msgerInChannel = channelMessengers.get(channelName);
         }
         if (msgerInChannel == null) {
             callbackContext.error("channel " + channelName + " is not found");
@@ -724,7 +741,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
         @Override
         public void onMessageReceived(JSONObject obj) {
-            final CallbackContext storedCallback = channelCallback.get(getNamespace());
+            final CallbackContext storedCallback = channelCallbacks.get(getNamespace());
             if (storedCallback != null) {
                 //Log.i(TAG, "onMessageReceived > send message to callback");
                 PluginResult result = new PluginResult(PluginResult.Status.OK, obj);
