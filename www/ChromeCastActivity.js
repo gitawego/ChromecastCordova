@@ -18,11 +18,11 @@
         onMessage: function (channelName, fnc) {
             if (!globalConf.channels[channelName]) {
                 exec(
-                    function (evt) {
-                        evt.emit(channelName, evt);
+                    function (e) {
+                        evt.emit(channelName, e);
                     },
                     function (err) {
-                        console.error('onMessage Error : '+err+' for channel '+channelName);
+                        console.error('onMessage Error : ' + err + ' for channel ' + channelName);
                     },
                     "ChromeCast",
                     "onMessage",
@@ -31,13 +31,25 @@
             }
             return evt.on(channelName, fnc);
         },
+        /**
+         * @method sendMessage
+         * @param {String} channelName
+         * @param {Object} msg
+         * @param {Function} callback
+         */
         sendMessage: function (channelName, msg, callback) {
+            if(msg === null || msg === undefined){
+                msg = {};
+            }
+            if (typeof(msg) !== 'object') {
+                throw new TypeError('message must be an object');
+            }
             exec(
-                function (evt) {
-                    callback && callback(null, evt);
+                function (e) {
+                    callback && callback(null, e);
                 },
                 function (err) {
-                    console.error('sendMessage Error',err);
+                    console.error('sendMessage Error', err);
                     callback && callback(err);
                 },
                 "ChromeCast",
@@ -47,8 +59,8 @@
         },
         loadMedia: function (opt, callback) {
             exec(
-                function (evt) {
-                    callback && callback(null, evt);
+                function (e) {
+                    callback && callback(null, e);
                 },
                 function (err) {
                     callback && callback(err);
@@ -60,8 +72,8 @@
         },
         playMedia: function (position, callback) {
             exec(
-                function (evt) {
-                    callback && callback(null, evt);
+                function (e) {
+                    callback && callback(null, e);
                 },
                 function (err) {
                     callback && callback(err);
@@ -73,8 +85,8 @@
         },
         pauseMedia: function (callback) {
             exec(
-                function (evt) {
-                    callback && callback(null, evt);
+                function (e) {
+                    callback && callback(null, e);
                 },
                 function (err) {
                     callback && callback(err);
@@ -86,20 +98,51 @@
         },
         setMediaVolume: function (opt, callback) {
             opt = opt || {};
+            var mtd, param;
+            if ('muted' in opt) {
+                mtd = 'setMuted';
+                param = opt.muted;
+            } else {
+                mtd = 'setVolume';
+                param = opt.volume;
+                if (param < 0) {
+                    param = 0;
+                } else if (param > 1) {
+                    param = 1;
+                }
+                //param *= 100;
+                console.log('setMediaVolume', param);
+            }
+
             exec(
-                function (evt) {
-                    callback && callback(null, evt);
+                function (e) {
+                    callback && callback(null, e);
                 },
                 function (err) {
+                    console.error('setMediaVolume error: ', err);
                     callback && callback(err);
                 },
                 "ChromeCast",
-                ('muted' in opt) ? "setMuted" : "setVolume",
-                []
+                mtd,
+                [param]
             );
         },
-        onMediaStatus:function(fnc){
-            return this.caster.on('mediaStatus',fnc);
+        setMediaVolumeBy: function (value, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    console.error('setMediaVolumeBy error: ', err);
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "setVolumeBy",
+                [value]
+            );
+        },
+        onMediaStatus: function (fnc) {
+            return this.caster.on('mediaStatus', fnc);
         },
         getMediaStatus: function (callback) {
             exec(
@@ -119,7 +162,7 @@
                 []
             );
         },
-        stop:function(){
+        stop: function () {
 
         }
     };
