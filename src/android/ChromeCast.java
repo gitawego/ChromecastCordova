@@ -64,6 +64,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     private CallbackContext receiverCallback;
     private CallbackContext mediaStatusCallback;
     private CallbackContext setReceiverCallback;
+    private CallbackContext onEndedCallback;
     private HashMap<String, CallbackContext> channelCallback;
     private HashMap<String, Messenger> channels;
     private RouteInfo currentRoute;
@@ -71,7 +72,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     private enum Actions {
         startReceiverListener, onMessage, sendMessage, setReceiver, loadMedia,
         pauseMedia, playMedia, seekBy, setVolume, setVolumeBy, setMuted,
-        getMediaStatus, stopCast, startStatusListener
+        getMediaStatus, stopCast, startStatusListener, startOnEndedListener
     }
 
     /*public ChromecastPlugin() {
@@ -128,8 +129,15 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             callbackContext.error("APP_ID NOT FOUND");
         } else {
             switch (Actions.valueOf(action)) {
+                case startOnEndedListener:
+                    onEndedCallback = callbackContext;
+                    break;
                 case startReceiverListener:
                     startReceiverListenerAction(callbackContext);
+                    break;
+                case startStatusListener:
+                    mediaStatusCallback = callbackContext;
+                    callbackContext.sendPluginResult(getMediaStatus(null));
                     break;
                 case onMessage:
                     onMessage(args.getString(0), callbackContext);
@@ -210,10 +218,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                         return false;
                     }
                     break;
-                case startStatusListener:
-                    mediaStatusCallback = callbackContext;
-                    callbackContext.sendPluginResult(getMediaStatus(null));
-                    break;
+
                 default:
                     callbackContext.error("Invalid action: " + action);
 
@@ -399,6 +404,11 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             public void onSessionEnded(SessionError error) {
                 Log.i(TAG, "onEnded " + error);
                 messageStream = null;
+                if(onEndedCallback != null){
+                    PluginResult result = new PluginResult(PluginResult.Status.OK, new JSONObject());
+                    result.setKeepCallback(true);
+                    onEndedCallback.sendPluginResult(result);
+                }
 
             }
         });
@@ -476,6 +486,27 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         msgerInChannel.send(msg);
     }
 
+    private boolean ensurePlayer(CallbackContext... params) {
+        int l = params.length;
+        CallbackContext callbackContext = null;
+        if (l == 1) {
+            callbackContext = params[0];
+        }
+        boolean flag = true;
+        String reason = null;
+        if (session == null) {
+            reason = "SESSION_NOT_FOUND";
+            flag = false;
+        } else if (messageStream == null) {
+            reason = "REMOTEMEDIA_NOT_FOUND";
+            flag = false;
+        }
+
+        if (!flag && callbackContext != null) {
+            callbackContext.error(reason);
+        }
+        return flag;
+    }
 
     private void startCast(JSONObject opt, CallbackContext callbackContext) throws IOException, JSONException, URISyntaxException {
 
@@ -498,15 +529,11 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             context.setContentInfo(info);
         }
 
-        if (session == null) {
-            callbackContext.error("SESSION_NOT_FOUND");
-        } else if (messageStream == null) {
-            callbackContext.error("REMOTEMEDIA_NOT_FOUND");
-        } else {
+        if (ensurePlayer(callbackContext)) {
             String currentContentId = messageStream.getContentId();
             //not content id defined, or current content id is different, or player is not playing
             if (currentContentId == null || !currentContentId.equals(url) ||
-                    (currentContentId.equals(url) || messageStream.getPlayerState() != PlayerState.PLAYING)) {
+                    (currentContentId.equals(url) && messageStream.getPlayerState() != PlayerState.PLAYING)) {
                 try {
                     Log.d(TAG, "Session loadMedia :" + url);
                     MediaProtocolCommand cmd = messageStream.loadMedia(url, context, autostart);
@@ -542,16 +569,19 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
     private void play(double position) throws IOException {
         Log.d(TAG, "Player State :" + messageStream.getPlayerState());
-        if (messageStream.getPlayerState() == PlayerState.STOPPED) {
-            messageStream.resume();
-        } else {
-            messageStream.playFrom(position);
+        if (ensurePlayer()) {
+            if (messageStream.getPlayerState() == PlayerState.STOPPED) {
+                messageStream.resume();
+            } else {
+                messageStream.playFrom(position);
+            }
         }
+
     }
 
     private void seekBy(final double value) throws IOException {
         Log.d(TAG, "seekBy " + value);
-        if (messageStream != null) {
+        if (ensurePlayer()) {
             cordova.getThreadPool().execute(new Runnable() {
                 public void run() {
                     double pos = messageStream.getStreamPosition();
@@ -567,13 +597,14 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     }
 
     private void pause() throws IOException {
-        if (messageStream.getPlayerState() == PlayerState.PLAYING) {
+
+        if (ensurePlayer() && messageStream.getPlayerState() == PlayerState.PLAYING) {
             messageStream.stop();
         }
     }
 
     private void setVolume(double vol, CallbackContext callbackContext) {
-        if (messageStream != null) {
+        if (ensurePlayer(callbackContext)) {
             try {
                 messageStream.setVolume(vol);
                 callbackContext.success();
@@ -584,22 +615,25 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     }
 
     private void setVolumeBy(double value, CallbackContext callbackContext) {
-        if (messageStream == null) {
-            callbackContext.error("RemoteMedia not found");
-            return;
+        if (ensurePlayer(callbackContext)) {
+            if (messageStream.getPlayerState() == null) {
+                callbackContext.error("PLAYER_NOT_READY");
+            } else {
+                double currentVol = messageStream.getVolume();
+                double vol = currentVol + value;
+                if (vol < 0) {
+                    vol = 0;
+                } else if (vol > 1) {
+                    vol = 1;
+                }
+                setVolume(vol, callbackContext);
+            }
         }
-        double currentVol = messageStream.getVolume();
-        double vol = currentVol + value;
-        if (vol < 0) {
-            vol = 0;
-        } else if (vol > 1) {
-            vol = 1;
-        }
-        setVolume(vol, callbackContext);
+
     }
 
     private void setMuted(boolean muted, CallbackContext callbackContext) {
-        if (messageStream != null) {
+        if (ensurePlayer(callbackContext)) {
             try {
                 messageStream.setMuted(muted);
                 callbackContext.success();
@@ -610,7 +644,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     }
 
     private void stopCast() throws IOException {
-        if (messageStream != null) {
+        if (ensurePlayer()) {
             messageStream.stop();
             /*session.endSession();
             messageStream = null;
@@ -742,20 +776,5 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             routeStateListener = null;
         }
     }
-
-    private class StatusRunner implements Runnable {
-        public void run() {
-            while (!Thread.currentThread().isInterrupted()) {
-                try {
-                    if (mediaStatusCallback != null) {
-                        mediaStatusCallback.sendPluginResult(getMediaStatus(null));
-                    }
-                    Thread.sleep(1000);
-                } catch (Exception e) {
-                }
-            }
-        }
-    }
-
 
 }

@@ -18,6 +18,7 @@
             function () {
                 self.initialized = true;
                 console.log('chromecast initialized');
+                self.startOnEndedListener();
                 self.emit('initialized');
             },
             function (err) {
@@ -110,12 +111,27 @@
         emit: function () {
             return evt.emit.apply(evt, arguments);
         },
+        startOnEndedListener:function(){
+            var self = this;
+            exec(
+                function () {
+                    self.emit('closed');
+                },
+                function (err) {
+
+                },
+                "ChromeCast",
+                "startOnEndedListener",
+                []
+            );
+        },
         launch: function (receiverInfo) {
             var self = this, promise = {};
             setTimeout(function(){
                 exec(
                     function () {
                         promise.callback && promise.callback(new ChromeCast.Activity(receiverInfo, self));
+
                     },
                     function (err) {
                         promise.fallback && promise.fallback(err);
