@@ -115,6 +115,7 @@
             var self = this;
             exec(
                 function () {
+                    console.log("session ended");
                     self.emit('closed');
                 },
                 function (err) {
