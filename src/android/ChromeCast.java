@@ -103,7 +103,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                 buildMediaRouteSelector(MediaRouteHelper.CATEGORY_CAST, APP_ID, null);
 
         mediaRouterCallback = new MediaRouterCallback();
-        mediaRouter.addCallback(mediaRouteSelector, mediaRouterCallback, MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY);
+        mediaRouter.addCallback(mediaRouteSelector, mediaRouterCallback, MediaRouter.CALLBACK_FLAG_PERFORM_ACTIVE_SCAN);
         if (callbackContext != null) {
             callbackContext.success();
         }
@@ -129,6 +129,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             callbackContext.error("APP_ID NOT FOUND");
         } else {
             if (castContext == null) {
+                Log.d(TAG,"castContext is null, reinit routers...");
                 cordova.getActivity().runOnUiThread(new Runnable() {
                     public void run() {
                         try {
@@ -364,8 +365,15 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
                                   MediaRouteStateChangeListener listener) {
         selectedDevice = castDevice;
         routeStateListener = listener;
-        Log.d(TAG, "device available");
-        openSession();
+
+        if (selectedDevice != null) {
+            Log.d(TAG, "device available");
+            openSession();
+        } else {
+            endSession();
+        }
+
+
     }
 
     public void onSetVolume(double volume) {
@@ -432,7 +440,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
             public void onSessionStartFailed(SessionError error) {
                 Log.e(TAG, "onSessionStartFailed " + error);
                 resetSessionChannel();
-                //resetCast();
+                resetCast();
                 emitSessionEndedToJS();
             }
 
@@ -442,7 +450,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
                 if (error != null) {
                     resetSessionChannel();
-                    //resetCast();
+                    resetCast();
                 }
 
                 emitSessionEndedToJS();
@@ -481,7 +489,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
     private void endSession() {
         if ((session != null) && (session.hasStarted())) {
             try {
-                session.setStopApplicationWhenEnding(true);
+                //session.setStopApplicationWhenEnding(true);
                 if (session.hasChannel()) {
                     //todo leave channel
                     session.getChannel().detachAllMessageStreams();
@@ -766,7 +774,7 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
         return result;
     }
 
-    private void emitReceiverListToJS(){
+    private void emitReceiverListToJS() {
         if (receiverCallback != null) {
             JSONArray jsonRoute = getRoutes();
             PluginResult result = new PluginResult(PluginResult.Status.OK, jsonRoute);
@@ -777,14 +785,15 @@ public class ChromeCast extends CordovaPlugin implements MediaRouteAdapter {
 
 
     public void onDestroy() {
-        super.onDestroy();
         resetSessionChannel();
         endSession();
         resetCast();
+        super.onDestroy();
     }
 
     private void resetCast() {
         mediaRouter.removeCallback(mediaRouterCallback);
+        MediaRouteHelper.unregisterMediaRouteProvider(castContext);
         castContext.dispose();
         castContext = null;
     }
