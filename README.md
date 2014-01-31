@@ -28,5 +28,5 @@ and copy hooks/after_prepare/dependencies.json to your_project/config/
 ```
 target=android-19
 ```
-## now you can use cordova to build the project.
+##now you can use cordova to build the project.
 
