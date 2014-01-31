@@ -21,8 +21,12 @@ android.library.reference.3=path/to/mediarouter
 # Project target.
 target=android-19
 ```
+* you can use after_prepare hook as well to achieve this, just copy  hoos/after_prepare/add_libs_to_project.properties.js to your_project/.cordova/hooks/after_prepare/,
+and copy hooks/after_prepare/dependencies.json to your_project/config/
+
 * make sure all the android build target are the same (in file project.properties). For lib mediarouter, target must be bigger than 18
 ```
 target=android-19
 ```
 ## now you can use cordova to build the project.
+

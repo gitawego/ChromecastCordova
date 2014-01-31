@@ -1,0 +1,6 @@
+{
+	"android":[
+		"../../../libs/appcompat",
+		"../../../libs/mediarouter"
+	]
+}
