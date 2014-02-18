@@ -8,7 +8,8 @@
         globalConf = {
             receiverListener: false,
             receiverList: [],
-            isAvailable: false
+            isAvailable: false,
+            channels: {}
         }, evt = new CustomEvent();
 
     function ChromeCast(opt) {
@@ -47,6 +48,7 @@
                         }, window.location.href);
                     }
                 });
+                this.attachCoreEvent();
                 this.startStatusListener();
             } else {
                 this.once('initialized', function () {
@@ -54,6 +56,18 @@
                 });
             }
             return this;
+        },
+        attachCoreEvent: function () {
+            var self = this;
+            this.onMessage('media', function (msg) {
+                if (typeof(msg) === 'string') {
+                    msg = JSON.parse(msg);
+                }
+                self.emit(msg.name, msg.message);
+            });
+            this.on('timeupdate', function (evt) {
+                self.config.currentTime = evt.currentTime;
+            });
         },
         startStatusListener: function (callback, errback) {
             var self = this;
@@ -78,8 +92,12 @@
             );
             exec(
                 function (session) {
+                    if (typeof(session.media) === 'string') {
+                        session.media = JSON.parse(session.media);
+                    }
                     evt.emit("requestSessionSuccess", session);
                     self.config.session = session;
+
                 },
                 function (err) {
                     evt.emit("requestSessionError", new Error(err));
@@ -90,18 +108,30 @@
             );
         },
         startReceiverListener: function (callback, errback) {
+            var self = this;
             if (globalConf.receiverListener) {
                 return;
             }
             globalConf.receiverListener = true;
             exec(
                 function (receivers) {
-                    receivers.length && evt.emit('receiverAvailable');
-                    evt.emit('receiver', receivers);
+                    console.log("receivers", receivers);
+
                     globalConf.receiverList = receivers;
+
+                    if (receivers.length) {
+                        self.config.receiverAvailable = true;
+                        evt.emit('receiverAvailable');
+                    } else {
+                        delete self.config.receiverAvailable;
+                    }
+
+                    evt.emit('receivers', receivers);
+
                     !globalConf.receiverListener && callback && callback(receivers);
                 },
                 function (err) {
+                    delete self.config.receiverAvailable;
                     errback && errback(err);
                 },
                 "ChromeCast",
@@ -146,22 +176,27 @@
             );
         },
         launch: function (receiverInfo) {
-            var self = this, promise = {};
-            setTimeout(function () {
-                exec(
-                    function () {
-                        self.config.activity = new ChromeCast.Activity(receiverInfo, self);
-                        promise.callback && promise.callback(self.config.activity);
-
-                    },
-                    function (err) {
+            if (!this.config.receiverAvailable) {
+                console.warn('no receiver is available');
+                return;
+            }
+            var promise = {};
+            exec(
+                function () {
+                    setTimeout(function () {
+                        promise.callback && promise.callback();
+                    }, 0);
+                },
+                function (err) {
+                    setTimeout(function () {
                         promise.fallback && promise.fallback(err);
-                    },
-                    "ChromeCast",
-                    "setReceiver",
-                    [receiverInfo.index]
-                );
-            }, 0);
+                    }, 0);
+
+                },
+                "ChromeCast",
+                "setReceiver",
+                [receiverInfo.index]
+            );
             return {
                 then: function (cb, fb) {
                     promise.callback = cb;
@@ -169,36 +204,201 @@
                 }
             };
         },
-        loadMedia: function (opt, callback) {
-            return this.config.activity.loadMedia(opt, callback);
-        },
         onMessage: function (channelName, fnc) {
-            return this.config.activity.onMessage(channelName, fnc);
+            if (!globalConf.channels[channelName]) {
+                exec(
+                    function (e) {
+                        evt.emit(channelName, e);
+                    },
+                    function (err) {
+                        console.error('onMessage Error : ' + err + ' for channel ' + channelName);
+                    },
+                    "ChromeCast",
+                    "onMessage",
+                    [channelName]
+                );
+            }
+            return evt.on(channelName, fnc);
         },
+        /**
+         * @method sendMessage
+         * @param {String} channelName
+         * @param {Object|String|Number|Boolean} msg
+         * @param {Function} callback
+         */
         sendMessage: function (channelName, msg, callback) {
-            return this.config.activity.sendMessage(channelName, msg, callback);
+            if (msg === null || msg === undefined) {
+                msg = {};
+            }
+            if (typeof(msg) !== 'string') {
+                msg = JSON.stringify(msg);
+            }
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    console.error('sendMessage Error', err);
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "sendMessage",
+                [channelName, msg]
+            );
         },
-        playMedia:function(){
-            return this.config.activity.playMedia();
+        loadMedia: function (opt, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "loadMedia",
+                [opt]
+            );
         },
-        pauseMedia:function(){
-            return this.config.activity.pauseMedia();
+        playMedia: function (callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "playMedia",
+                []
+            );
         },
-        seekMedia:function(position,callback){
-            return this.config.activity.seekMedia(position,callback);
+        pauseMedia: function (callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "pauseMedia",
+                []
+            );
         },
-        seekMediaBy:function(position,callback){
-            return this.config.activity.seekMediaBy(position,callback);
+        stopMedia: function (callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "stopMedia",
+                []
+            );
         },
-        setReceiverVolume:function(vol,callback){
-            return this.config.activity.setReceiverVolume(vol,callback);
+        seekMedia: function (position, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "seekMedia",
+                [position]
+            );
         },
-        toggleReceiverMute:function(){
-            return this.config.activity.toggleReceiverMute();
+        seekMediaBy: function (position, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "seekMediaBy",
+                [position]
+            );
         },
-        setReceiverMuted:function(muted){
-            return this.config.activity.setReceiverMuted(muted);
+        setReceiverVolume: function (vol, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    console.error('setMediaVolume error: ', err);
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "setDeviceVolume",
+                [vol]
+            );
+        },
+        setReceiverVolumeBy: function (vol, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    console.error('setMediaVolume error: ', err);
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "setDeviceVolumeBy",
+                [vol]
+            );
+        },
+        toggleReceiverMute: function (callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    console.error('toggleReceiverMute error: ', err);
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "toggleMuted",
+                []
+            );
+        },
+        setReceiverMuted: function (muted, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    console.error('setReceiverMuted error: ', err);
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "setMuted",
+                [muted]
+            );
+        },
+        getMediaStatus: function (callback) {
+            exec(
+                function (status) {
+                    callback && callback({
+                        status: status
+                    });
+                },
+                function (err) {
+                    callback && callback({
+                        status: null,
+                        error: new Error(err)
+                    });
+                },
+                "ChromeCast",
+                'getMediaStatus',
+                []
+            );
         }
+
     };
     module.exports = ChromeCast;
 })();

@@ -34,39 +34,6 @@ public class MediaPlayer {
         parentContext = scope;
     }
 
-    private void clearMediaState() {
-        setCurrentMediaMetadata(null, null, null);
-        refreshPlaybackPosition(0, 0);
-    }
-
-    /**
-     * Updates the currently-playing-item metadata display. If the image URL is non-null and is
-     * different from the one that is currently displayed, an asynchronous request will be started
-     * to fetch the image at that URL.
-     */
-    protected final void setCurrentMediaMetadata(String title, String subtitle, Uri imageUrl) {
-        Log.d(TAG, "setCurrentMediaMetadata: " + title + "," + subtitle + "," + imageUrl);
-
-
-    }
-
-    /**
-     * @param position The stream position, or 0 if no media is currently loaded, or -1 to leave
-     *                 the value unchanged.
-     * @param duration The stream duration, or 0 if no media is currently loaded, or -1 to leave
-     *                 the value unchanged.
-     */
-    protected final void refreshPlaybackPosition(long position, long duration) {
-
-    }
-
-    private void updatePlaybackPosition() {
-        if (mMediaPlayer == null) {
-            return;
-        }
-        refreshPlaybackPosition(mMediaPlayer.getApproximateStreamPosition(),
-                mMediaPlayer.getStreamDuration());
-    }
 
     public void attachMediaPlayer() {
         if (mMediaPlayer != null) {
@@ -82,10 +49,9 @@ public class MediaPlayer {
                 MediaStatus mediaStatus = mMediaPlayer.getMediaStatus();
                 if ((mediaStatus != null)
                         && (mediaStatus.getPlayerState() == MediaStatus.PLAYER_STATE_IDLE)) {
-                    clearMediaState();
+                    //todo clear states
                 }
                 parentContext.onMediaStatusCallback(getMediaStatus());
-                //updatePlaybackPosition();
             }
         });
 
@@ -94,7 +60,6 @@ public class MediaPlayer {
                     @Override
                     public void onMetadataUpdated() {
                         Log.d(TAG, "MediaControlChannel.onMetadataUpdated");
-
 
                         //todo update metadata
                     }
@@ -138,20 +103,23 @@ public class MediaPlayer {
             status.put("deviceVolume", Cast.CastApi.getVolume(mApiClient));
             status.put("deviceMuted", Cast.CastApi.isMute(mApiClient));
             if (mMediaPlayer != null) {
+                MediaMetadata metadata = null;
                 MediaStatus mediaStatus = mMediaPlayer.getMediaStatus();
-                MediaInfo mediaInfo = mediaStatus.getMediaInfo();
-                MediaMetadata metadata = mediaInfo.getMetadata();
-                status.put("state", mediaStatus.getPlayerState());
-                status.put("position", mediaStatus.getStreamPosition());
                 status.put("duration", mMediaPlayer.getStreamDuration());
-                status.put("idleReason", mediaStatus.getIdleReason());
-                //status.put("title", mediaStatus.getTitle());
-                status.put("contentId", mediaStatus.getMediaInfo().getContentId());
-                status.put("contentType", mediaStatus.getMediaInfo().getContentType());
-                status.put("volume", mediaStatus.getStreamVolume());
-                status.put("muted", mediaStatus.isMute());
-                //status.put("processing", mediaStatus.isStreamProgressing());
-                status.put("customData", mediaStatus.getCustomData());
+                if (mediaStatus != null) {
+                    MediaInfo mediaInfo = mediaStatus.getMediaInfo();
+                    metadata = mediaInfo.getMetadata();
+
+                    status.put("state", mediaStatus.getPlayerState());
+                    status.put("position", mediaStatus.getStreamPosition());
+                    status.put("idleReason", mediaStatus.getIdleReason());
+                    status.put("contentId", mediaStatus.getMediaInfo().getContentId());
+                    status.put("contentType", mediaStatus.getMediaInfo().getContentType());
+                    status.put("volume", mediaStatus.getStreamVolume());
+                    status.put("muted", mediaStatus.isMute());
+                    status.put("customData", mediaStatus.getCustomData());
+                }
+
                 if (metadata != null) {
                     status.put("title", metadata.getString(MediaMetadata.KEY_TITLE));
                     String artist = metadata.getString(MediaMetadata.KEY_ARTIST);
@@ -177,7 +145,7 @@ public class MediaPlayer {
     /*
      * Begins playback of the currently selected video.
      */
-    public void playMedia(JSONObject media, final CallbackContext callbackContext) {
+    public void loadMedia(JSONObject media, final CallbackContext callbackContext) {
         Log.d(TAG, "playMedia: " + media);
         if (media == null) {
             return;
@@ -187,7 +155,7 @@ public class MediaPlayer {
             return;
         }
         try {
-            MediaInfo mediaInfo = buildMediaInfo(media);
+            MediaInfo mediaInfo = buildMediaInfo(media.getJSONObject("mediaInfo"));
 
             mMediaPlayer.load(mApiClient, mediaInfo, media.has("autoplay") && media.getBoolean("autoplay"))
                     .setResultCallback(
@@ -208,23 +176,6 @@ public class MediaPlayer {
 
     }
 
-    public void pauseMedia(CallbackContext callbackContext) {
-        if (mMediaPlayer == null) {
-            callbackContext.error("player not found");
-            return;
-        }
-        try {
-            mMediaPlayer.pause(mApiClient);
-            callbackContext.success();
-        } catch (IOException e) {
-            Log.e(TAG, "Unable to pause", e);
-            callbackContext.error("unable to pause");
-        } catch (IllegalStateException e) {
-            Log.e(TAG, e.getMessage());
-            callbackContext.error(e.getMessage());
-        }
-    }
-
     public void playMedia(CallbackContext callbackContext) {
         if (mMediaPlayer == null) {
             callbackContext.error("player not found");
@@ -242,6 +193,42 @@ public class MediaPlayer {
             callbackContext.error(e.getMessage());
         }
     }
+
+    public void pauseMedia(CallbackContext callbackContext) {
+        if (mMediaPlayer == null) {
+            callbackContext.error("player not found");
+            return;
+        }
+        try {
+            mMediaPlayer.pause(mApiClient);
+            callbackContext.success();
+        } catch (IOException e) {
+            Log.e(TAG, "Unable to pause", e);
+            callbackContext.error("unable to pause");
+        } catch (IllegalStateException e) {
+            Log.e(TAG, e.getMessage());
+            callbackContext.error(e.getMessage());
+        }
+    }
+
+    public void stopMedia(CallbackContext callbackContext, JSONObject customData) {
+        if (mMediaPlayer == null) {
+            callbackContext.error("player not found");
+            return;
+        }
+        try {
+            mMediaPlayer.stop(mApiClient, customData);
+            callbackContext.success();
+        } catch (IOException e) {
+            Log.e(TAG, "Unable to pause", e);
+            callbackContext.error("unable to pause");
+        } catch (IllegalStateException e) {
+            Log.e(TAG, e.getMessage());
+            callbackContext.error(e.getMessage());
+        }
+    }
+
+
 
     public void seekMedia(Long position, String... behavior) {
 
@@ -279,7 +266,7 @@ public class MediaPlayer {
 
     public void seekMediaBy(long value, String... behavior) {
         try {
-            long pos = (long) (getMediaStatus().getDouble("position") + value);
+            long pos = getMediaStatus().getLong("position") + value;
             this.seekMedia(pos, behavior);
         } catch (JSONException e) {
             Log.e(TAG, e.getMessage());
@@ -337,12 +324,11 @@ public class MediaPlayer {
 
     private MediaInfo buildMediaInfo(JSONObject opt) {
         try {
-            MediaInfo.Builder info = new MediaInfo.Builder(opt.getString("src"));
+            MediaInfo.Builder info = new MediaInfo.Builder(opt.getString("contentId"));
             info.setContentType(opt.getString("contentType"));
             if (opt.has("customData")) {
                 info.setCustomData(opt.getJSONObject("customData"));
             }
-
 
             String streamType = opt.has("streamType") ? opt.getString("streamType") : "BUFFERED";
 
@@ -363,8 +349,7 @@ public class MediaPlayer {
         } catch (JSONException e) {
             Log.e(TAG, e.getMessage());
         }
-
-
+        return null;
     }
 
 }
