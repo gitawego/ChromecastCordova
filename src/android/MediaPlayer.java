@@ -229,7 +229,6 @@ public class MediaPlayer {
     }
 
 
-
     public void seekMedia(Long position, String... behavior) {
 
         if (mMediaPlayer == null) {
@@ -248,6 +247,13 @@ public class MediaPlayer {
         } else if (afterSeekMode.equals("DO_NOTHING")) {
             resumeState = RemoteMediaPlayer.RESUME_STATE_UNCHANGED;
         }
+
+        if (position < 0) {
+            position = 0L;
+        } else if (position > mMediaPlayer.getStreamDuration()) {
+            position = mMediaPlayer.getStreamDuration();
+        }
+
         mSeeking = true;
         mMediaPlayer.seek(mApiClient, position, resumeState).setResultCallback(
                 new ResultCallback<RemoteMediaPlayer.MediaChannelResult>() {
