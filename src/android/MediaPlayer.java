@@ -8,6 +8,7 @@ import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.common.images.WebImage;
 
+import com.google.android.gms.drive.Metadata;
 import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
@@ -93,29 +94,9 @@ public class MediaPlayer {
                     @Override
                     public void onMetadataUpdated() {
                         Log.d(TAG, "MediaControlChannel.onMetadataUpdated");
-                        String title = null;
-                        String artist = null;
-                        Uri imageUrl = null;
 
-                        MediaInfo mediaInfo = mMediaPlayer.getMediaInfo();
-                        if (mediaInfo != null) {
-                            MediaMetadata metadata = mediaInfo.getMetadata();
-                            if (metadata != null) {
-                                title = metadata.getString(MediaMetadata.KEY_TITLE);
 
-                                artist = metadata.getString(MediaMetadata.KEY_ARTIST);
-                                if (artist == null) {
-                                    artist = metadata.getString(MediaMetadata.KEY_STUDIO);
-                                }
-
-                                List<WebImage> images = metadata.getImages();
-                                if ((images != null) && !images.isEmpty()) {
-                                    WebImage image = images.get(0);
-                                    imageUrl = image.getUrl();
-                                }
-                            }
-                            setCurrentMediaMetadata(title, artist, imageUrl);
-                        }
+                        //todo update metadata
                     }
                 });
 
@@ -152,11 +133,14 @@ public class MediaPlayer {
 
     public JSONObject getMediaStatus() {
         JSONObject status = new JSONObject();
-        MediaStatus mediaStatus = mMediaPlayer.getMediaStatus();
+
         try {
             status.put("deviceVolume", Cast.CastApi.getVolume(mApiClient));
             status.put("deviceMuted", Cast.CastApi.isMute(mApiClient));
             if (mMediaPlayer != null) {
+                MediaStatus mediaStatus = mMediaPlayer.getMediaStatus();
+                MediaInfo mediaInfo = mediaStatus.getMediaInfo();
+                MediaMetadata metadata = mediaInfo.getMetadata();
                 status.put("state", mediaStatus.getPlayerState());
                 status.put("position", mediaStatus.getStreamPosition());
                 status.put("duration", mMediaPlayer.getStreamDuration());
@@ -168,6 +152,19 @@ public class MediaPlayer {
                 status.put("muted", mediaStatus.isMute());
                 //status.put("processing", mediaStatus.isStreamProgressing());
                 status.put("customData", mediaStatus.getCustomData());
+                if (metadata != null) {
+                    status.put("title", metadata.getString(MediaMetadata.KEY_TITLE));
+                    String artist = metadata.getString(MediaMetadata.KEY_ARTIST);
+                    if (artist != null) {
+                        status.put("artist", artist);
+                        status.put("studio", metadata.getString(MediaMetadata.KEY_STUDIO));
+                    }
+                    List<WebImage> images = metadata.getImages();
+                    if ((images != null) && !images.isEmpty()) {
+                        WebImage image = images.get(0);
+                        status.put("imageUrl", image.getUrl());
+                    }
+                }
             }
 
         } catch (JSONException e) {

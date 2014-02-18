@@ -1,6 +1,7 @@
 {
-	"android":[
-		"../../../libs/appcompat",
-		"../../../libs/mediarouter"
-	]
+    "android": [
+        "../../../libs/appcompat",
+        "../../../libs/mediarouter",
+        "../../../libs/google_play_services/libproject/google-play-services_lib"
+    ]
 }

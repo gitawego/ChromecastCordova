@@ -53,6 +53,7 @@ import java.util.concurrent.TimeUnit;
 public class ChromeCast extends CordovaPlugin {
     //private final String APP_ID = "31a76198-2182-481a-a4a6-27d351872026";
     private String APP_ID = null;
+    private static Boolean DEBUG_MODE = true;
     private static final String MSG_PREFIX = "urn:x-cast:";
     private String PACKAGE_NAME = "com.sesamtv.chromecast";
     private static final String TAG = "ChromeCastPlugin";
@@ -74,12 +75,14 @@ public class ChromeCast extends CordovaPlugin {
     private CallbackContext mediaStatusCallback;
     private CallbackContext setReceiverCallback;
     private CallbackContext onEndedCallback;
+    private CallbackContext onSessionCreatedCallback;
 
 
     private enum Actions {
         startReceiverListener, onMessage, sendMessage, setReceiver, loadMedia,
-        pauseMedia, playMedia, seekBy, setVolume, setVolumeBy, setMuted, toggleMuted,
-        getMediaStatus, stopApplication, startStatusListener, startOnEndedListener
+        pauseMedia, playMedia, seekMedia, seekMediaBy, setDeviceVolume, setDeviceVolumeBy, setMuted, toggleMuted,
+        getMediaStatus, stopApplication, startStatusListener, startOnEndedListener,
+        startSessionListener
     }
 
     public String getRawNSName(String ns) {
@@ -158,6 +161,8 @@ public class ChromeCast extends CordovaPlugin {
                 case startOnEndedListener:
                     onEndedCallback = callbackContext;
                     break;
+                case startSessionListener:
+                    onSessionCreatedCallback = callbackContext;
                 case startReceiverListener:
                     startReceiverListenerAction(callbackContext);
                     break;
@@ -194,15 +199,23 @@ public class ChromeCast extends CordovaPlugin {
                 case playMedia:
                     playMediaAction(callbackContext);
                     break;
-                case seekBy:
+                case seekMediaBy:
                     try {
-                        seekByAction(args.getLong(0));
+                        seekMediaByAction(args.getLong(0));
                         callbackContext.success();
                     } catch (IOException e) {
                         callbackContext.error(e.getMessage());
                     }
                     break;
-                case setVolume:
+                case seekMedia:
+                    try {
+                        seekMediaAction(args.getLong(0));
+                        callbackContext.success();
+                    } catch (IOException e) {
+                        callbackContext.error(e.getMessage());
+                    }
+                    break;
+                case setDeviceVolume:
                     final double vol = args.getDouble(0);
                     Log.d(TAG, "setVolume " + vol);
                     cordova.getThreadPool().execute(new Runnable() {
@@ -211,7 +224,7 @@ public class ChromeCast extends CordovaPlugin {
                         }
                     });
                     break;
-                case setVolumeBy:
+                case setDeviceVolumeBy:
                     cordova.getThreadPool().execute(new Runnable() {
                         public void run() {
                             try {
@@ -344,13 +357,28 @@ public class ChromeCast extends CordovaPlugin {
         });
     }
 
-    private void seekByAction(final long value) throws IOException {
+    private void seekMediaByAction(final long value) throws IOException {
         Log.d(TAG, "seekBy " + value);
         if (ensurePlayer()) {
             cordova.getThreadPool().execute(new Runnable() {
                 public void run() {
                     try {
                         mMediaPlayer.seekMediaBy(value);
+                    } catch (Exception e) {
+                        Log.d(TAG, "seekBy Error " + e.getMessage());
+                    }
+                }
+            });
+        }
+    }
+
+    private void seekMediaAction(final long value) throws IOException {
+        Log.d(TAG, "seekmedia " + value);
+        if (ensurePlayer()) {
+            cordova.getThreadPool().execute(new Runnable() {
+                public void run() {
+                    try {
+                        mMediaPlayer.seekMedia(value);
                     } catch (Exception e) {
                         Log.d(TAG, "seekBy Error " + e.getMessage());
                     }
@@ -489,10 +517,30 @@ public class ChromeCast extends CordovaPlugin {
         }
     }
 
-    private void onSessionStarted() {
+    private void onSessionStarted(ApplicationConnectionResult result) {
         if (setReceiverCallback != null) {
             setReceiverCallback.success();
             setReceiverCallback = null;
+        }
+        if (onSessionCreatedCallback != null) {
+            try {
+                JSONObject info = new JSONObject();
+                info.put("appId", APP_ID);
+                info.put("sessionId", result.getSessionId());
+                info.put("displayName", result.getApplicationMetadata().getName());
+                info.put("statusCode", result.getStatus().getStatusCode());
+                JSONObject mediaStatus = mMediaPlayer.getMediaStatus();
+                ArrayList<JSONObject> media = new ArrayList<JSONObject>();
+                if (mediaStatus.has("contentId")) {
+                    media.add(mediaStatus);
+                }
+                info.put("media", media);
+                PluginResult res = new PluginResult(PluginResult.Status.OK, info);
+                res.setKeepCallback(true);
+                onSessionCreatedCallback.sendPluginResult(res);
+            } catch (JSONException e) {
+                Log.e(TAG, e.getMessage());
+            }
         }
     }
 
@@ -604,6 +652,20 @@ public class ChromeCast extends CordovaPlugin {
     private void launchReceiver() {
         try {
             mCastListener = new Cast.Listener() {
+                @Override
+                public void onApplicationStatusChanged() {
+                    if (mApiClient != null) {
+                        Log.d(TAG, "onApplicationStatusChanged: "
+                                + Cast.CastApi.getApplicationStatus(mApiClient));
+                    }
+                }
+
+                @Override
+                public void onVolumeChanged() {
+                    if (mApiClient != null) {
+                        Log.d(TAG, "onVolumeChanged: " + Cast.CastApi.getVolume(mApiClient));
+                    }
+                }
 
                 @Override
                 public void onApplicationDisconnected(int errorCode) {
@@ -617,6 +679,9 @@ public class ChromeCast extends CordovaPlugin {
             mConnectionFailedListener = new ConnectionFailedListener();
             Cast.CastOptions.Builder apiOptionsBuilder = Cast.CastOptions
                     .builder(mSelectedDevice, mCastListener);
+            if (DEBUG_MODE) {
+                apiOptionsBuilder.setDebuggingEnabled();
+            }
             mApiClient = new GoogleApiClient.Builder(cordova.getActivity().getApplicationContext())
                     .addApi(Cast.API, apiOptionsBuilder.build())
                     .addConnectionCallbacks(mConnectionCallbacks)
@@ -875,7 +940,7 @@ public class ChromeCast extends CordovaPlugin {
                                 + wasLaunched);
                 mApplicationStarted = true;
 
-                onSessionStarted();
+                onSessionStarted(result);
                 // set the initial instructions
                 // on the receiver
                 //sendMessage(getString(R.string.instructions));

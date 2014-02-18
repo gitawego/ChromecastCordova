@@ -38,7 +38,7 @@
          * @param {Function} callback
          */
         sendMessage: function (channelName, msg, callback) {
-            if(msg === null || msg === undefined){
+            if (msg === null || msg === undefined) {
                 msg = {};
             }
             if (typeof(msg) !== 'object') {
@@ -70,7 +70,7 @@
                 [opt]
             );
         },
-        playMedia: function (position, callback) {
+        playMedia: function (callback) {
             exec(
                 function (e) {
                     callback && callback(null, e);
@@ -80,7 +80,7 @@
                 },
                 "ChromeCast",
                 "playMedia",
-                [position]
+                []
             );
         },
         pauseMedia: function (callback) {
@@ -96,24 +96,33 @@
                 []
             );
         },
-        setMediaVolume: function (opt, callback) {
-            opt = opt || {};
-            var mtd, param;
-            if ('muted' in opt) {
-                mtd = 'setMuted';
-                param = opt.muted;
-            } else {
-                mtd = 'setVolume';
-                param = opt.volume;
-                if (param < 0) {
-                    param = 0;
-                } else if (param > 1) {
-                    param = 1;
-                }
-                //param *= 100;
-                console.log('setMediaVolume', param);
-            }
-
+        seekMedia: function (position, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "seekMedia",
+                [position]
+            );
+        },
+        seekMediaBy: function (position, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "seekMediaBy",
+                [position]
+            );
+        },
+        setReceiverVolume: function (vol, callback) {
             exec(
                 function (e) {
                     callback && callback(null, e);
@@ -123,22 +132,50 @@
                     callback && callback(err);
                 },
                 "ChromeCast",
-                mtd,
-                [param]
+                "setDeviceVolume",
+                [vol]
             );
         },
-        setMediaVolumeBy: function (value, callback) {
+        setReceiverVolumeBy: function (vol, callback) {
             exec(
                 function (e) {
                     callback && callback(null, e);
                 },
                 function (err) {
-                    console.error('setMediaVolumeBy error: ', err);
+                    console.error('setMediaVolume error: ', err);
                     callback && callback(err);
                 },
                 "ChromeCast",
-                "setVolumeBy",
-                [value]
+                "setDeviceVolumeBy",
+                [vol]
+            );
+        },
+        toggleReceiverMute: function (callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    console.error('toggleReceiverMute error: ', err);
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "toggleMuted",
+                []
+            );
+        },
+        setReceiverMuted: function (muted, callback) {
+            exec(
+                function (e) {
+                    callback && callback(null, e);
+                },
+                function (err) {
+                    console.error('setReceiverMuted error: ', err);
+                    callback && callback(err);
+                },
+                "ChromeCast",
+                "setMuted",
+                [muted]
             );
         },
         onMediaStatus: function (fnc) {
