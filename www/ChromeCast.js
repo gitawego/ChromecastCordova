@@ -11,6 +11,22 @@
             isAvailable: false,
             channels: {}
         }, evt = new CustomEvent();
+    const COMMAND_PAUSE = 1;
+    const COMMAND_SEEK = 2;
+    const COMMAND_SET_VOLUME = 4;
+    const COMMAND_TOGGLE_MUTE = 8;
+    const COMMAND_SKIP_FORWARD = 16;
+    const COMMAND_SKIP_BACKWARD = 32;
+    const PLAYER_STATE_UNKNOWN = 0;
+    const PLAYER_STATE_IDLE = 1;
+    const PLAYER_STATE_PLAYING = 2;
+    const PLAYER_STATE_PAUSED = 3;
+    const PLAYER_STATE_BUFFERING = 4;
+    const IDLE_REASON_NONE = 0;
+    const IDLE_REASON_FINISHED = 1;
+    const IDLE_REASON_CANCELED = 2;
+    const IDLE_REASON_INTERRUPTED = 3;
+    const IDLE_REASON_ERROR = 4;
 
     function ChromeCast(opt) {
         var self = this;
@@ -91,6 +107,9 @@
             this.startListener('status', function (status) {
                     if (self.config.session) {
                         self.config.session.media[0] = status;
+                    }
+                    if (status.state === 1 && status.idleReason === IDLE_REASON_FINISHED) {
+                        evt.emit('stop');
                     }
                     evt.emit('mediaStatus', status);
                     !globalConf.statusListener && callback && callback(status);
