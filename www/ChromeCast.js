@@ -15,7 +15,8 @@
     function ChromeCast(opt) {
         var self = this;
         this.config = {
-            appId: opt.appId
+            appId: opt.appId,
+            defaultRouteRegxp: /DEFAULT_ROUTE/
         };
         exec(
             function () {
@@ -37,19 +38,17 @@
         init: function () {
             var self = this;
             if (this.initialized) {
-                this.startReceiverListener(function (err) {
+                this.startReceiverListener(null, function (err) {
                     if (err) {
                         throw new Error('cast initialization failed : ' + err);
                     } else {
                         globalConf.isAvailable = true;
-                        window.postMessage && window.postMessage({
-                            source: 'CastApi',
-                            event: 'Hello'
-                        }, window.location.href);
                     }
                 });
+
                 this.attachCoreEvent();
-                this.startStatusListener();
+                this.startCommonListeners();
+
             } else {
                 this.once('initialized', function () {
                     return self.init();
@@ -69,14 +68,27 @@
                 self.config.currentTime = evt.currentTime;
             });
         },
-        startStatusListener: function (callback, errback) {
+        startListener: function (type, callback, fallback) {
+            exec(
+                function (response) {
+                    callback && callback(response);
+                },
+                function (err) {
+                    console.error(type, err);
+                    fallback && fallback(err);
+                },
+                "ChromeCast",
+                "startListener",
+                [type]
+            );
+        },
+        startCommonListeners: function (callback, errback) {
             var self = this;
             if (globalConf.statusListener) {
                 return;
             }
             globalConf.statusListener = true;
-            exec(
-                function (status) {
+            this.startListener('status', function (status) {
                     if (self.config.session) {
                         self.config.session.media[0] = status;
                     }
@@ -85,27 +97,21 @@
                 },
                 function (err) {
                     errback && errback(err);
-                },
-                "ChromeCast",
-                "startStatusListener",
-                []
-            );
-            exec(
-                function (session) {
+                });
+
+            this.startListener('session', function (session) {
                     if (typeof(session.media) === 'string') {
                         session.media = JSON.parse(session.media);
                     }
                     evt.emit("requestSessionSuccess", session);
                     self.config.session = session;
-
+                    if (!session.wasLaunched) {
+                        self.emit('activeSession');
+                    }
                 },
                 function (err) {
                     evt.emit("requestSessionError", new Error(err));
-                },
-                "ChromeCast",
-                "startSessionListener",
-                []
-            );
+                });
         },
         startReceiverListener: function (callback, errback) {
             var self = this;
@@ -113,31 +119,45 @@
                 return;
             }
             globalConf.receiverListener = true;
-            exec(
-                function (receivers) {
+            this.startListener('receivers', function (receivers) {
                     console.log("receivers", receivers);
+                    globalConf.receiverList = receivers.filter(function (rec) {
+                        return !self.config.defaultRouteRegxp.exec(rec.id);
+                    });
 
-                    globalConf.receiverList = receivers;
-
-                    if (receivers.length) {
+                    if (globalConf.receiverList.length) {
                         self.config.receiverAvailable = true;
                         evt.emit('receiverAvailable');
                     } else {
                         delete self.config.receiverAvailable;
                     }
-
-                    evt.emit('receivers', receivers);
-
+                    evt.emit('receivers', globalConf.receiverList);
                     !globalConf.receiverListener && callback && callback(receivers);
                 },
                 function (err) {
                     delete self.config.receiverAvailable;
                     errback && errback(err);
+                });
+        },
+        startOnEndedListener: function () {
+            var self = this;
+            this.startListener('sessionEnded', function () {
+                    console.log("session ended");
+                    self.emit('closed');
+                    self.emit('sessionUpdated', false);
                 },
-                "ChromeCast",
-                "startReceiverListener",
-                []
-            );
+                function (err) {
+
+                });
+        },
+        getSelectedReceiver: function () {
+            var i = 0, l = globalConf.receiverList.length, receiver;
+            for (; i < l; i++) {
+                receiver = globalConf.receiverList[i];
+                if (receiver.isSelected) {
+                    return receiver;
+                }
+            }
         },
         getReceiver: function (id) {
             if (typeof(id) === 'undefined') {
@@ -160,21 +180,7 @@
         emit: function () {
             return evt.emit.apply(evt, arguments);
         },
-        startOnEndedListener: function () {
-            var self = this;
-            exec(
-                function () {
-                    console.log("session ended");
-                    self.emit('closed');
-                },
-                function (err) {
 
-                },
-                "ChromeCast",
-                "startOnEndedListener",
-                []
-            );
-        },
         launch: function (receiverInfo) {
             if (!this.config.receiverAvailable) {
                 console.warn('no receiver is available');
@@ -246,13 +252,14 @@
                 [channelName, msg]
             );
         },
-        loadMedia: function (opt, callback) {
+        loadMedia: function (opt, callback, fallback) {
             exec(
                 function (e) {
                     callback && callback(null, e);
                 },
                 function (err) {
-                    callback && callback(err);
+                    console.error("loadMedia failed", err);
+                    fallback && fallback(err);
                 },
                 "ChromeCast",
                 "loadMedia",
@@ -260,11 +267,14 @@
             );
         },
         playMedia: function (callback) {
+            var self = this;
             exec(
                 function (e) {
                     callback && callback(null, e);
+                    self.emit('play', e);
                 },
                 function (err) {
+                    console.error("playMedia failed", err);
                     callback && callback(err);
                 },
                 "ChromeCast",
@@ -273,9 +283,11 @@
             );
         },
         pauseMedia: function (callback) {
+            var self = this;
             exec(
                 function (e) {
                     callback && callback(null, e);
+                    self.emit('pause');
                 },
                 function (err) {
                     callback && callback(err);
@@ -286,9 +298,11 @@
             );
         },
         stopMedia: function (callback) {
+            var self = this;
             exec(
                 function (e) {
                     callback && callback(null, e);
+                    self.emit('stop');
                 },
                 function (err) {
                     callback && callback(err);
@@ -299,9 +313,11 @@
             );
         },
         seekMedia: function (position, callback) {
+            var self = this;
             exec(
                 function (e) {
                     callback && callback(null, e);
+                    self.emit('seek');
                 },
                 function (err) {
                     callback && callback(err);
@@ -324,56 +340,56 @@
                 [position]
             );
         },
-        setReceiverVolume: function (vol, callback) {
+        setReceiverVolume: function (vol, callback, fallback) {
             exec(
                 function (e) {
                     callback && callback(null, e);
                 },
                 function (err) {
                     console.error('setMediaVolume error: ', err);
-                    callback && callback(err);
+                    fallback && fallback(err);
                 },
                 "ChromeCast",
                 "setDeviceVolume",
                 [vol]
             );
         },
-        setReceiverVolumeBy: function (vol, callback) {
+        setReceiverVolumeBy: function (vol, callback, fallback) {
             exec(
                 function (e) {
                     callback && callback(null, e);
                 },
                 function (err) {
                     console.error('setMediaVolume error: ', err);
-                    callback && callback(err);
+                    fallback && fallback(err);
                 },
                 "ChromeCast",
                 "setDeviceVolumeBy",
                 [vol]
             );
         },
-        toggleReceiverMute: function (callback) {
+        toggleReceiverMute: function (callback, fallback) {
             exec(
                 function (e) {
                     callback && callback(null, e);
                 },
                 function (err) {
                     console.error('toggleReceiverMute error: ', err);
-                    callback && callback(err);
+                    fallback && fallback(err);
                 },
                 "ChromeCast",
                 "toggleMuted",
                 []
             );
         },
-        setReceiverMuted: function (muted, callback) {
+        setReceiverMuted: function (muted, callback, fallback) {
             exec(
                 function (e) {
                     callback && callback(null, e);
                 },
                 function (err) {
                     console.error('setReceiverMuted error: ', err);
-                    callback && callback(err);
+                    fallback && fallback(err);
                 },
                 "ChromeCast",
                 "setMuted",

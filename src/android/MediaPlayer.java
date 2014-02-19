@@ -50,6 +50,7 @@ public class MediaPlayer {
                 if ((mediaStatus != null)
                         && (mediaStatus.getPlayerState() == MediaStatus.PLAYER_STATE_IDLE)) {
                     //todo clear states
+                    Log.d(TAG, "clear states");
                 }
                 parentContext.onMediaStatusCallback(getMediaStatus());
             }
@@ -111,7 +112,7 @@ public class MediaPlayer {
                     metadata = mediaInfo.getMetadata();
 
                     status.put("state", mediaStatus.getPlayerState());
-                    status.put("position", mediaStatus.getStreamPosition());
+                    status.put("position", mMediaPlayer.getApproximateStreamPosition());
                     status.put("idleReason", mediaStatus.getIdleReason());
                     status.put("contentId", mediaStatus.getMediaInfo().getContentId());
                     status.put("contentType", mediaStatus.getMediaInfo().getContentType());
@@ -119,7 +120,6 @@ public class MediaPlayer {
                     status.put("muted", mediaStatus.isMute());
                     status.put("customData", mediaStatus.getCustomData());
                 }
-
                 if (metadata != null) {
                     status.put("title", metadata.getString(MediaMetadata.KEY_TITLE));
                     String artist = metadata.getString(MediaMetadata.KEY_ARTIST);
@@ -146,31 +146,48 @@ public class MediaPlayer {
      * Begins playback of the currently selected video.
      */
     public void loadMedia(JSONObject media, final CallbackContext callbackContext) {
-        Log.d(TAG, "playMedia: " + media);
+        Log.d(TAG, "loadMedia: " + media);
         if (media == null) {
+            Log.e(TAG, "loadMedia: no media found");
+            callbackContext.error("no media found");
             return;
         }
+
         if (mMediaPlayer == null) {
             Log.e(TAG, "Trying to play a video with no active media session");
+            callbackContext.error("Trying to play a video with no active media session");
             return;
         }
         try {
+            boolean isAutoPlay = media.has("autoplay") && media.getBoolean("autoplay");
             MediaInfo mediaInfo = buildMediaInfo(media.getJSONObject("mediaInfo"));
 
-            mMediaPlayer.load(mApiClient, mediaInfo, media.has("autoplay") && media.getBoolean("autoplay"))
-                    .setResultCallback(
-                            new ResultCallback<RemoteMediaPlayer.MediaChannelResult>() {
-                                @Override
-                                public void onResult(RemoteMediaPlayer.MediaChannelResult result) {
-                                    if (!result.getStatus().isSuccess()) {
-                                        Log.e(TAG, "Failed to load media.");
-                                        callbackContext.error("Failed to load media.");
-                                    } else {
-                                        callbackContext.success();
+            MediaInfo currentInfo = mMediaPlayer.getMediaInfo();
+            if (currentInfo != null && currentInfo.getContentId().equals(mediaInfo.getContentId())) {
+                Log.d(TAG, "loadMedia: media is the same");
+                if (isAutoPlay) {
+                    this.playMedia(callbackContext);
+                }
+
+            } else {
+                mMediaPlayer.load(mApiClient, mediaInfo, isAutoPlay)
+                        .setResultCallback(
+                                new ResultCallback<RemoteMediaPlayer.MediaChannelResult>() {
+                                    @Override
+                                    public void onResult(RemoteMediaPlayer.MediaChannelResult result) {
+                                        if (!result.getStatus().isSuccess()) {
+                                            Log.e(TAG, "Failed to load media.");
+                                            callbackContext.error("Failed to load media.");
+                                        } else {
+                                            callbackContext.success();
+                                        }
                                     }
-                                }
-                            });
+                                });
+            }
+
         } catch (JSONException e) {
+            Log.e(TAG, e.getMessage());
+        } catch (Exception e) {
             Log.e(TAG, e.getMessage());
         }
 
@@ -183,14 +200,20 @@ public class MediaPlayer {
         }
         try {
             mMediaPlayer.play(mApiClient);
-            callbackContext.success();
+            if (callbackContext != null) {
+                callbackContext.success();
+            }
+
         } catch (IOException e) {
             Log.e(TAG, "Unable to play", e);
-            callbackContext.error("unable to play");
-
+            if (callbackContext != null) {
+                callbackContext.error("unable to play");
+            }
         } catch (IllegalStateException e) {
             Log.e(TAG, e.getMessage());
-            callbackContext.error(e.getMessage());
+            if (callbackContext != null) {
+                callbackContext.error(e.getMessage());
+            }
         }
     }
 
@@ -200,7 +223,14 @@ public class MediaPlayer {
             return;
         }
         try {
-            mMediaPlayer.pause(mApiClient);
+            MediaStatus mediaStatus = mMediaPlayer.getMediaStatus();
+            int playerState = mediaStatus.getPlayerState();
+
+            if (mediaStatus != null && playerState != MediaStatus.PLAYER_STATE_PAUSED &&
+                    playerState != MediaStatus.PLAYER_STATE_IDLE) {
+                mMediaPlayer.pause(mApiClient);
+            }
+
             callbackContext.success();
         } catch (IOException e) {
             Log.e(TAG, "Unable to pause", e);
@@ -217,7 +247,14 @@ public class MediaPlayer {
             return;
         }
         try {
-            mMediaPlayer.stop(mApiClient, customData);
+            MediaStatus mediaStatus = mMediaPlayer.getMediaStatus();
+            if (mediaStatus != null && mediaStatus.getPlayerState() != MediaStatus.PLAYER_STATE_IDLE) {
+                if (customData == null) {
+                    mMediaPlayer.stop(mApiClient);
+                } else {
+                    mMediaPlayer.stop(mApiClient, customData);
+                }
+            }
             callbackContext.success();
         } catch (IOException e) {
             Log.e(TAG, "Unable to pause", e);
@@ -247,23 +284,24 @@ public class MediaPlayer {
         } else if (afterSeekMode.equals("DO_NOTHING")) {
             resumeState = RemoteMediaPlayer.RESUME_STATE_UNCHANGED;
         }
-
+        long duration = mMediaPlayer.getStreamDuration();
         if (position < 0) {
             position = 0L;
-        } else if (position > mMediaPlayer.getStreamDuration()) {
-            position = mMediaPlayer.getStreamDuration();
+        } else if (position > duration) {
+            position = duration;
         }
-
+        Log.d(TAG, "seek media position " + position + " ;duration: " + duration);
         mSeeking = true;
         mMediaPlayer.seek(mApiClient, position, resumeState).setResultCallback(
                 new ResultCallback<RemoteMediaPlayer.MediaChannelResult>() {
+
                     @Override
                     public void onResult(RemoteMediaPlayer.MediaChannelResult result) {
                         Status status = result.getStatus();
                         if (status.isSuccess()) {
                             mSeeking = false;
                         } else {
-                            Log.w(TAG, "Unable to seek: " + status.getStatusCode());
+                            Log.e(TAG, "Unable to seek: " + status.getStatusCode());
                         }
                     }
 
@@ -271,13 +309,8 @@ public class MediaPlayer {
     }
 
     public void seekMediaBy(long value, String... behavior) {
-        try {
-            long pos = getMediaStatus().getLong("position") + value;
-            this.seekMedia(pos, behavior);
-        } catch (JSONException e) {
-            Log.e(TAG, e.getMessage());
-        }
-
+        long pos = mMediaPlayer.getApproximateStreamPosition() + value;
+        this.seekMedia(pos, behavior);
     }
 
     public void setDeciveVolume(double volume) {
