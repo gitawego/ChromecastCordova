@@ -178,8 +178,6 @@ public class ChromeCast extends CordovaPlugin {
         } else {
             callbackContext.error("LISTENER_TYPE_NOT_FOUND");
         }
-
-
     }
 
     private boolean executeActions(final String action, final JSONArray args, final CallbackContext callbackContext) throws JSONException {
@@ -632,12 +630,15 @@ public class ChromeCast extends CordovaPlugin {
                 jsonRoute.put("isSelected", rInfo.isSelected());
                 jsonRoute.put("index", i);
                 jsonRoute.put("volume", rInfo.getVolume());
-                jsonRoute.put("ipAddress", dInfo.getIpAddress());
-                List<WebImage> icons = dInfo.getIcons();
-                if ((icons != null) && !icons.isEmpty()) {
-                    WebImage icon = icons.get(0);
-                    jsonRoute.put("icon", icon.getUrl());
+                if (dInfo != null) {
+                    jsonRoute.put("ipAddress", dInfo.getIpAddress());
+                    List<WebImage> icons = dInfo.getIcons();
+                    if ((icons != null) && !icons.isEmpty()) {
+                        WebImage icon = icons.get(0);
+                        jsonRoute.put("icon", icon.getUrl());
+                    }
                 }
+
                 if (rInfo.isSelected()) {
                     jsonRoute.put("isConnected", mSelectedDevice != null);
                 }
@@ -1030,7 +1031,8 @@ public class ChromeCast extends CordovaPlugin {
             Status status = result.getStatus();
             Log.d(mClassTag,
                     "ApplicationConnectionResultCallback.onResult: statusCode"
-                            + status.getStatusCode());
+                            + status.getStatusCode()
+            );
             if (status.isSuccess()) {
                 ApplicationMetadata applicationMetadata = result
                         .getApplicationMetadata();

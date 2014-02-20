@@ -9,24 +9,24 @@
             receiverListener: false,
             receiverList: [],
             isAvailable: false,
-            channels: {}
+            channels: {},
+            COMMAND_PAUSE: 1,
+            COMMAND_SEEK: 2,
+            COMMAND_SET_VOLUME: 4,
+            COMMAND_TOGGLE_MUTE: 8,
+            COMMAND_SKIP_FORWARD: 16,
+            COMMAND_SKIP_BACKWARD: 32,
+            PLAYER_STATE_UNKNOWN: 0,
+            PLAYER_STATE_IDLE: 1,
+            PLAYER_STATE_PLAYING: 2,
+            PLAYER_STATE_PAUSED: 3,
+            PLAYER_STATE_BUFFERING: 4,
+            IDLE_REASON_NONE: 0,
+            IDLE_REASON_FINISHED: 1,
+            IDLE_REASON_CANCELED: 2,
+            IDLE_REASON_INTERRUPTED: 3,
+            IDLE_REASON_ERROR: 4
         }, evt = new CustomEvent();
-    const COMMAND_PAUSE = 1;
-    const COMMAND_SEEK = 2;
-    const COMMAND_SET_VOLUME = 4;
-    const COMMAND_TOGGLE_MUTE = 8;
-    const COMMAND_SKIP_FORWARD = 16;
-    const COMMAND_SKIP_BACKWARD = 32;
-    const PLAYER_STATE_UNKNOWN = 0;
-    const PLAYER_STATE_IDLE = 1;
-    const PLAYER_STATE_PLAYING = 2;
-    const PLAYER_STATE_PAUSED = 3;
-    const PLAYER_STATE_BUFFERING = 4;
-    const IDLE_REASON_NONE = 0;
-    const IDLE_REASON_FINISHED = 1;
-    const IDLE_REASON_CANCELED = 2;
-    const IDLE_REASON_INTERRUPTED = 3;
-    const IDLE_REASON_ERROR = 4;
 
     function ChromeCast(opt) {
         var self = this;
@@ -108,7 +108,7 @@
                     if (self.config.session) {
                         self.config.session.media[0] = status;
                     }
-                    if (status.state === 1 && status.idleReason === IDLE_REASON_FINISHED) {
+                    if (status.state === 1 && status.idleReason === globalConf.IDLE_REASON_FINISHED) {
                         evt.emit('stop');
                     }
                     evt.emit('mediaStatus', status);
@@ -122,14 +122,15 @@
                     if (typeof(session.media) === 'string') {
                         session.media = JSON.parse(session.media);
                     }
-                    evt.emit("requestSessionSuccess", session);
+                    evt.emit('session', session);
+
                     self.config.session = session;
                     if (!session.wasLaunched) {
                         self.emit('activeSession');
                     }
                 },
                 function (err) {
-                    evt.emit("requestSessionError", new Error(err));
+                    console.error(err);
                 });
         },
         startReceiverListener: function (callback, errback) {
@@ -199,7 +200,6 @@
         emit: function () {
             return evt.emit.apply(evt, arguments);
         },
-
         launch: function (receiverInfo) {
             if (!this.config.receiverAvailable) {
                 console.warn('no receiver is available');
@@ -209,11 +209,14 @@
             exec(
                 function () {
                     setTimeout(function () {
+                        evt.emit("requestSessionSuccess");
                         promise.callback && promise.callback();
                     }, 0);
                 },
                 function (err) {
+                    console.error(err);
                     setTimeout(function () {
+                        evt.emit("requestSessionError", new Error(err));
                         promise.fallback && promise.fallback(err);
                     }, 0);
 
@@ -365,7 +368,7 @@
                     callback && callback(null, e);
                 },
                 function (err) {
-                    console.error('setMediaVolume error: ', err);
+                    console.error('setReceiverVolume error: ', err);
                     fallback && fallback(err);
                 },
                 "ChromeCast",
@@ -379,7 +382,7 @@
                     callback && callback(null, e);
                 },
                 function (err) {
-                    console.error('setMediaVolume error: ', err);
+                    console.error('setReceiverVolumeBy error: ', err);
                     fallback && fallback(err);
                 },
                 "ChromeCast",
