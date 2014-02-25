@@ -64,7 +64,8 @@ public class MediaPlayer {
 
                         //todo update metadata
                     }
-                });
+                }
+        );
 
         try {
             Cast.CastApi.setMessageReceivedCallbacks(mApiClient, mMediaPlayer.getNamespace(),
@@ -109,8 +110,9 @@ public class MediaPlayer {
                 status.put("duration", mMediaPlayer.getStreamDuration());
                 if (mediaStatus != null) {
                     MediaInfo mediaInfo = mediaStatus.getMediaInfo();
-                    metadata = mediaInfo.getMetadata();
-
+                    if (mediaInfo != null) {
+                        metadata = mediaInfo.getMetadata();
+                    }
                     status.put("state", mediaStatus.getPlayerState());
                     status.put("position", mMediaPlayer.getApproximateStreamPosition());
                     status.put("idleReason", mediaStatus.getIdleReason());
@@ -182,7 +184,8 @@ public class MediaPlayer {
                                             callbackContext.success();
                                         }
                                     }
-                                });
+                                }
+                        );
             }
 
         } catch (JSONException e) {
@@ -305,7 +308,8 @@ public class MediaPlayer {
                         }
                     }
 
-                });
+                }
+        );
     }
 
     public void seekMediaBy(long value, String... behavior) {
