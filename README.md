@@ -40,6 +40,7 @@ target=android-19
 
 
 About SesamTV : 
+==========
 Since 2003, Sesam TV has pioneered home media convergence with its famous SesamTV Media Center software and more than 2 millions users.  Bringing innovation, experience and products to the connected home, SesamTV empowers leading TV Operators and actors in the industry.
 
 Licence : 
