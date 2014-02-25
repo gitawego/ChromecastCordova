@@ -2,12 +2,10 @@
 ChromecastWrapper
 =================
 
-Wrapper Chromecast JAVA/Javascript in a Cordova Plugin
+Plugin chromecast for Cordova.
 
 you can use the chromecast javascript API in a webview in Phonegap application like you did it with a desktop chrome application.
  
-The Api is exactty the javascript API used with the desktop chrome sender API side.
-https://developers.google.com/cast/docs/chrome_sender
 =========
 
 ##Installation
