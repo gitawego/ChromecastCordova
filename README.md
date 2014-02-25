@@ -10,7 +10,7 @@ you can use the chromecast javascript API in a webview in Phonegap application l
 
 ##Installation
 
-* prepare libs and tools with this [tutorial](https://github.com/googlecast/cast-android-tictactoe/blob/master/INSTALL_CAST_ECLIPSE.txt)
+* prepare libs and tools with this [tutorial](https://developers.google.com/cast/docs/android_sender)
 * copy adt_path/sdk/extras/android/support/v7/mediarouter, adt_path/sdk/extras/android/support/v7/appcompat and adt_path/sdk/extras/google/google_play_services/libproject/google-play-services_lib to a custom folder.
 * go to each lib folder via terminal, and update the project:
 ```   
