@@ -1,5 +1,5 @@
 =======
-ChromecastWrapper
+Chromecast - Cordova
 =================
 
 Plugin chromecast for Cordova Android Application.
